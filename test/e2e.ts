@@ -85,9 +85,16 @@ try {
   await browser.saveScreenshot('test-results/editor.png')
   try {
     // Close through Tauri so this verifies the native window's backend cleanup.
-    await browser.execute(async () => {
-      await window.__TAURI__.window.getCurrentWindow().close()
+    const closeResult = await browser.executeAsync((done) => {
+      window.__TAURI__.window
+        .getCurrentWindow()
+        .close()
+        .then(
+          () => done('closed'),
+          (error: unknown) => done(`close failed: ${String(error)}`),
+        )
     })
+    assert.equal(closeResult, 'closed')
   } catch (error) {
     // WebdriverIO can reject when native close removes its last handle.
     if (!(error instanceof Error) || !error.message.includes('All window handles were removed')) throw error
