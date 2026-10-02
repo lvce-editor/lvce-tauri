@@ -16,17 +16,31 @@ await writeFile(join(workspace, 'smoke.txt'), 'before\n')
 const pidFile = join(profile, 'backend.pid')
 const driver = spawn('tauri-driver', [], {
   env: {
-    ...process.env, LVCE_TAURI_DIAGNOSTICS: resolve('test-results/native-startup.log'), LVCE_TAURI_WORKSPACE: workspace, LVCE_TAURI_PID_FILE: pidFile,
-    XDG_CONFIG_HOME: join(profile, 'config'), XDG_DATA_HOME: join(profile, 'data'),
-    XDG_CACHE_HOME: join(profile, 'cache'), XDG_STATE_HOME: join(profile, 'state'),
-    APPDATA: join(profile, 'appdata'), LOCALAPPDATA: join(profile, 'localappdata'),
-  }, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
+    ...process.env,
+    LVCE_TAURI_DIAGNOSTICS: resolve('test-results/native-startup.log'),
+    LVCE_TAURI_WORKSPACE: workspace,
+    LVCE_TAURI_PID_FILE: pidFile,
+    XDG_CONFIG_HOME: join(profile, 'config'),
+    XDG_DATA_HOME: join(profile, 'data'),
+    XDG_CACHE_HOME: join(profile, 'cache'),
+    XDG_STATE_HOME: join(profile, 'state'),
+    APPDATA: join(profile, 'appdata'),
+    LOCALAPPDATA: join(profile, 'localappdata'),
+  },
+  detached: process.platform !== 'win32',
+  stdio: ['ignore', 'pipe', 'pipe'],
 })
 let driverLog = ''
-driver.stdout.on('data', (chunk) => { driverLog += chunk })
-driver.stderr.on('data', (chunk) => { driverLog += chunk })
+driver.stdout.on('data', (chunk) => {
+  driverLog += chunk
+})
+driver.stderr.on('data', (chunk) => {
+  driverLog += chunk
+})
 let driverError
-driver.on('error', (error) => { driverError = error })
+driver.on('error', (error) => {
+  driverError = error
+})
 let browser
 let backendPid
 try {
@@ -34,14 +48,18 @@ try {
   while (true) {
     if (driverError) throw driverError
     if (driver.exitCode !== null) throw new Error(`Driver exited: ${driverLog}`)
-    try { if ((await fetch('http://127.0.0.1:4444/status')).ok) break } catch {}
+    try {
+      if ((await fetch('http://127.0.0.1:4444/status')).ok) break
+    } catch {}
     if (Date.now() >= deadline) throw new Error(`Driver startup timed out: ${driverLog}`)
     await delay(100)
   }
   const binary = process.env.TAURI_TEST_BINARY
   if (!binary) throw new Error('TAURI_TEST_BINARY must point to the packaged application')
   browser = await remote({
-    hostname: '127.0.0.1', port: 4444, logLevel: 'warn',
+    hostname: '127.0.0.1',
+    port: 4444,
+    logLevel: 'warn',
     capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
@@ -52,13 +70,15 @@ try {
   // LVCE keeps its keyboard textarea offscreen; pointer events belong to visible rows.
   await browser.$('.EditorRows .EditorRow').click()
   await browser.waitUntil(() => input.isFocused(), {
-    timeout: 10000, timeoutMsg: 'Clicking the editor did not focus its keyboard input',
+    timeout: 10000,
+    timeoutMsg: 'Clicking the editor did not focus its keyboard input',
   })
   await browser.keys([Key.Ctrl, 'a'])
   await browser.keys('after tauri')
   await browser.keys([Key.Ctrl, 's'])
   await browser.waitUntil(async () => (await readFile(join(workspace, 'smoke.txt'), 'utf8')).includes('after tauri'), {
-    timeout: 15000, timeoutMsg: 'Editor did not save the edited text through its Node backend',
+    timeout: 15000,
+    timeoutMsg: 'Editor did not save the edited text through its Node backend',
   })
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)
@@ -68,7 +88,9 @@ try {
   browser = undefined
   const stopDeadline = Date.now() + 10000
   while (true) {
-    try { process.kill(backendPid, 0) } catch (error) {
+    try {
+      process.kill(backendPid, 0)
+    } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ESRCH') break
       throw error
     }
@@ -78,14 +100,18 @@ try {
 } catch (error) {
   await writeFile('test-results/error.txt', error instanceof Error ? error.stack || error.message : String(error))
   if (process.platform === 'win32') {
-    const inventory = await promisify(execFile)('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "lvce-tauri|msedge|WebView" } | Select-Object Name,ProcessId,ParentProcessId,CommandLine | ConvertTo-Json']).catch((error) => ({ stdout: String(error) }))
+    const inventory = await promisify(execFile)('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "lvce-tauri|msedge|WebView" } | Select-Object Name,ProcessId,ParentProcessId,CommandLine | ConvertTo-Json',
+    ]).catch((error) => ({ stdout: String(error) }))
     await writeFile('test-results/windows-processes.json', inventory.stdout)
   }
   if (browser) {
     const url = new URL(await browser.getUrl().catch(() => 'about:blank'))
     await writeFile('test-results/location.txt', `${url.origin}${url.pathname}`)
     await browser.saveScreenshot('test-results/failure.png').catch(() => {})
-    await writeFile('test-results/page.html', await browser.getPageSource().catch(() => '') )
+    await writeFile('test-results/page.html', await browser.getPageSource().catch(() => ''))
   }
   throw error
 } finally {
@@ -95,7 +121,9 @@ try {
     if (process.platform === 'win32') {
       await promisify(execFile)('taskkill', ['/PID', `${pid}`, '/T', '/F']).catch(() => {})
     } else {
-      try { process.kill(-pid, 'SIGKILL') } catch (error) {
+      try {
+        process.kill(-pid, 'SIGKILL')
+      } catch (error) {
         if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') throw error
       }
     }

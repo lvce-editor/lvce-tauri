@@ -35,7 +35,9 @@ export const createAuth = (token: string | undefined) => {
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     })
-    response.end(`<!doctype html><html><head><meta charset="utf-8"><title>Opening LVCE Editor</title></head><body><script>${script}</script></body></html>`)
+    response.end(
+      `<!doctype html><html><head><meta charset="utf-8"><title>Opening LVCE Editor</title></head><body><script>${script}</script></body></html>`,
+    )
     return true
   }
   return { authorize, bootstrap }

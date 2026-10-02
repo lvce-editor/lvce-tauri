@@ -17,7 +17,9 @@ test('rejects unauthenticated requests, wrong hosts and cross-origin websocket u
 test('exchanges bootstrap token for a protected cookie and removes token from navigation', () => {
   let result: [number, Record<string, string>] | undefined
   const response = {
-    writeHead: (status: number, headers: Record<string, string>) => { result = [status, headers] },
+    writeHead: (status: number, headers: Record<string, string>) => {
+      result = [status, headers]
+    },
     end() {},
   }
   assert.equal(auth.bootstrap({ ...request(), method: 'GET', url: `/?tauriToken=${token}` }, response, 3456), true)
@@ -29,5 +31,8 @@ test('exchanges bootstrap token for a protected cookie and removes token from na
 test('requires a strong session token', () => assert.throws(() => createAuth('')))
 
 test('the staged server uses the tested authentication implementation', async () => {
-  assert.equal(await readFile('src-tauri/resources/node_modules/@lvce-editor/server/src/tauriAuth.js', 'utf8'), await readFile('.tmp/tsc/runtime/auth.js', 'utf8'))
+  assert.equal(
+    await readFile('src-tauri/resources/node_modules/@lvce-editor/server/src/tauriAuth.js', 'utf8'),
+    await readFile('.tmp/tsc/runtime/auth.js', 'utf8'),
+  )
 })

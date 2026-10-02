@@ -9,7 +9,8 @@ if (!existsSync(cwd)) {
   cloneSource(source, cwd)
 }
 const head = run('git', ['rev-parse', 'HEAD'], { cwd, stdio: 'pipe' })
-if (head !== source.revision) throw new Error(`Expected LVCE ${source.revision}, got ${head}; preserve or remove vendor checkout before preparing again`)
+if (head !== source.revision)
+  throw new Error(`Expected LVCE ${source.revision}, got ${head}; preserve or remove vendor checkout before preparing again`)
 for (const file of (await readdir('patches')).filter((name) => name.endsWith('.patch')).sort()) {
   const patch = resolve('patches', file)
   // Applying twice is an error: do not conceal local edits or a partially applied patch set.
