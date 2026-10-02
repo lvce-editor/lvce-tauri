@@ -47,7 +47,11 @@ try {
   await file.doubleClick()
   const input = browser.$('.EditorInput textarea')
   await input.waitForExist({ timeout: 30000 })
-  await input.click()
+  // LVCE keeps its keyboard textarea offscreen; pointer events belong to visible rows.
+  await browser.$('.EditorRows .EditorRow').click()
+  await browser.waitUntil(() => input.isFocused(), {
+    timeout: 10000, timeoutMsg: 'Clicking the editor did not focus its keyboard input',
+  })
   await browser.keys([Key.Ctrl, 'a'])
   await browser.keys('after tauri')
   await browser.keys([Key.Ctrl, 's'])
