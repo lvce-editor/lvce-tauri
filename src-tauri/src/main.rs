@@ -61,7 +61,18 @@ fn diagnostic(message: &str) {
 
 fn main() {
     diagnostic("Native host started");
-    let app = tauri::Builder::default().manage(Backend::default())
+    let app = tauri::Builder::default()
+        .manage(Backend::default())
+        .on_window_event(|window, event| {
+            if matches!(
+                event,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                diagnostic(&format!("Native window event: {event:?}"));
+                window.app_handle().state::<Backend>().stop();
+                diagnostic("Backend stopped after native window close");
+            }
+        })
         .invoke_handler(tauri::generate_handler![open_editor])
         .build(tauri::generate_context!()).unwrap_or_else(|error| {
             diagnostic(&format!("Failed to build Tauri application: {error}"));
@@ -70,12 +81,9 @@ fn main() {
     diagnostic("Native window built");
     app.run(|app, event| {
         match event {
-            tauri::RunEvent::WindowEvent {
-                event: tauri::WindowEvent::Destroyed,
-                ..
+            tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } => {
+                app.state::<Backend>().stop()
             }
-            | tauri::RunEvent::Exit
-            | tauri::RunEvent::ExitRequested { .. } => app.state::<Backend>().stop(),
             _ => {}
         }
     });
