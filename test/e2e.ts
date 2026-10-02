@@ -83,7 +83,12 @@ try {
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)
   await browser.saveScreenshot('test-results/editor.png')
-  await browser.closeWindow()
+  try {
+    await browser.closeWindow()
+  } catch (error) {
+    // WebdriverIO rejects when closing the native window also removes its last handle.
+    if (!(error instanceof Error) || !error.message.includes('All window handles were removed')) throw error
+  }
   await browser.deleteSession().catch(() => {})
   browser = undefined
   const stopDeadline = Date.now() + 10000
