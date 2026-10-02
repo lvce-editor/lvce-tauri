@@ -10,6 +10,6 @@ test('frontend loads the emitted TypeScript bootstrap as a module', async () => 
 test('Tauri registers the capability needed to close the main window', async () => {
   const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'))
   const capability = JSON.parse(await readFile('src-tauri/capabilities/default.json', 'utf8'))
-  assert.deepEqual(config.app.capabilities, [capability.identifier])
+  assert.deepEqual(config.app.security.capabilities, [capability.identifier])
   assert.ok(capability.permissions.includes('core:window:allow-close'))
 })

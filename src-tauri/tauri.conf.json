@@ -8,7 +8,6 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "capabilities": ["local-bootstrap"],
     "windows": [
       {
         "label": "main",
@@ -18,6 +17,7 @@
       }
     ],
     "security": {
+      "capabilities": ["local-bootstrap"],
       "csp": "default-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost"
     }
   },
