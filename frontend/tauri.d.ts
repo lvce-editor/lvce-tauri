@@ -3,5 +3,10 @@ interface Window {
     core: {
       invoke(command: string): Promise<unknown>
     }
+    window: {
+      getCurrentWindow(): {
+        close(): Promise<void>
+      }
+    }
   }
 }

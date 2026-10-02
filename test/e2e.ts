@@ -84,9 +84,12 @@ try {
   assert.ok(backendPid > 0)
   await browser.saveScreenshot('test-results/editor.png')
   try {
-    await browser.closeWindow()
+    // Close through Tauri so this verifies the native window's backend cleanup.
+    await browser.execute(() => {
+      void window.__TAURI__.window.getCurrentWindow().close()
+    })
   } catch (error) {
-    // WebdriverIO rejects when closing the native window also removes its last handle.
+    // WebdriverIO can reject when native close removes its last handle.
     if (!(error instanceof Error) || !error.message.includes('All window handles were removed')) throw error
   }
   await browser.deleteSession().catch(() => {})

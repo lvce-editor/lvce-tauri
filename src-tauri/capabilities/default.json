@@ -1,1 +1,5 @@
-{ "identifier": "local-bootstrap", "windows": ["main"], "permissions": ["core:default"] }
+{
+  "identifier": "local-bootstrap",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-close"]
+}
