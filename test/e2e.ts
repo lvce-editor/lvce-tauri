@@ -14,10 +14,12 @@ await mkdir(workspace)
 await mkdir('test-results', { recursive: true })
 await writeFile(join(workspace, 'smoke.txt'), 'before\n')
 const pidFile = join(profile, 'backend.pid')
+const diagnosticsFile = resolve('test-results/native-startup.log')
+await writeFile(diagnosticsFile, '')
 const driver = spawn('tauri-driver', [], {
   env: {
     ...process.env,
-    LVCE_TAURI_DIAGNOSTICS: resolve('test-results/native-startup.log'),
+    LVCE_TAURI_DIAGNOSTICS: diagnosticsFile,
     LVCE_TAURI_WORKSPACE: workspace,
     LVCE_TAURI_PID_FILE: pidFile,
     XDG_CONFIG_HOME: join(profile, 'config'),
@@ -96,11 +98,15 @@ try {
     })
     assert.equal(closeResult, 'closed')
   } catch (error) {
-    // WebdriverIO can reject when native close removes its last handle.
-    if (!(error instanceof Error) || !error.message.includes('All window handles were removed')) throw error
+    // Closing the last native window can destroy the session before its reply arrives.
+    // Require independent native-close and process-exit evidence below in either case.
+    if (
+      !(error instanceof Error) ||
+      !/All window handles were removed|Session terminated without a reply|invalid session id/.test(error.message)
+    ) {
+      throw error
+    }
   }
-  await browser.deleteSession().catch(() => {})
-  browser = undefined
   const stopDeadline = Date.now() + 10000
   while (true) {
     try {
@@ -112,6 +118,12 @@ try {
     if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} survived window close`)
     await delay(100)
   }
+  const diagnostics = await readFile(diagnosticsFile, 'utf8')
+  assert.match(diagnostics, /Native window event: CloseRequested/)
+  assert.match(diagnostics, /Backend stopped after native window close/)
+  // Session cleanup must not be what terminates the backend under test.
+  await browser.deleteSession().catch(() => {})
+  browser = undefined
 } catch (error) {
   await writeFile('test-results/error.txt', error instanceof Error ? error.stack || error.message : String(error))
   if (process.platform === 'win32') {
