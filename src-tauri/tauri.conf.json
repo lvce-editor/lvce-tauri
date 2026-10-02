@@ -8,6 +8,7 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "capabilities": ["local-bootstrap"],
     "windows": [
       {
         "label": "main",
