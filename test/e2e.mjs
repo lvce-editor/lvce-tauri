@@ -16,7 +16,7 @@ await writeFile(join(workspace, 'smoke.txt'), 'before\n')
 const pidFile = join(profile, 'backend.pid')
 const driver = spawn('tauri-driver', [], {
   env: {
-    ...process.env, LVCE_TAURI_WORKSPACE: workspace, LVCE_TAURI_PID_FILE: pidFile,
+    ...process.env, LVCE_TAURI_DIAGNOSTICS: resolve('test-results/native-startup.log'), LVCE_TAURI_WORKSPACE: workspace, LVCE_TAURI_PID_FILE: pidFile,
     XDG_CONFIG_HOME: join(profile, 'config'), XDG_DATA_HOME: join(profile, 'data'),
     XDG_CACHE_HOME: join(profile, 'cache'), XDG_STATE_HOME: join(profile, 'state'),
     APPDATA: join(profile, 'appdata'), LOCALAPPDATA: join(profile, 'localappdata'),
@@ -68,6 +68,10 @@ try {
   }
 } catch (error) {
   await writeFile('test-results/error.txt', error.stack || String(error))
+  if (process.platform === 'win32') {
+    const inventory = await promisify(execFile)('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "lvce-tauri|msedge|WebView" } | Select-Object Name,ProcessId,ParentProcessId,CommandLine | ConvertTo-Json']).catch((error) => ({ stdout: String(error) }))
+    await writeFile('test-results/windows-processes.json', inventory.stdout)
+  }
   if (browser) {
     const url = new URL(await browser.getUrl().catch(() => 'about:blank'))
     await writeFile('test-results/location.txt', `${url.origin}${url.pathname}`)
@@ -87,13 +91,13 @@ try {
   }
   // WebDriver may forcibly terminate the native host when deleting a failed session.
   // Always clean up both owned groups; the success path above still asserts normal exit.
+  const savedPid = await readFile(pidFile, 'utf8').catch(() => '')
+  if (savedPid) await killTree(Number(savedPid))
   if (!driverError) {
     const closed = driver.exitCode === null ? once(driver, 'close') : undefined
     await killTree(driver.pid)
     if (closed) await closed
   }
-  const savedPid = await readFile(pidFile, 'utf8').catch(() => '')
-  if (savedPid) await killTree(Number(savedPid))
   await writeFile('test-results/driver.log', driverLog)
   await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }

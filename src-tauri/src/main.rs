@@ -25,6 +25,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
 }
 
 fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
+    diagnostic("Starting Node backend");
     let state = app.state::<Backend>();
     let mut owned = state.0.lock().map_err(|e| e.to_string())?;
     if owned.is_some() { return Err("Backend already started".into()); }
@@ -44,14 +45,29 @@ fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
     if let Some(path) = std::env::var_os("LVCE_TAURI_PID_FILE") {
         std::fs::write(path, child.id().to_string()).map_err(|error| error.to_string())?;
     }
+    diagnostic("Node backend ready");
     *owned = Some(child);
     Ok(url)
 }
 
+fn diagnostic(message: &str) {
+    if let Some(path) = std::env::var_os("LVCE_TAURI_DIAGNOSTICS") {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "{message}");
+        }
+    }
+}
+
 fn main() {
+    diagnostic("Native host started");
     let app = tauri::Builder::default().manage(Backend::default())
         .invoke_handler(tauri::generate_handler![open_editor])
-        .build(tauri::generate_context!()).expect("Failed to build Tauri application");
+        .build(tauri::generate_context!()).unwrap_or_else(|error| {
+            diagnostic(&format!("Failed to build Tauri application: {error}"));
+            panic!("Failed to build Tauri application: {error}");
+        });
+    diagnostic("Native window built");
     app.run(|app, event| {
         if matches!(event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
             app.state::<Backend>().stop();
