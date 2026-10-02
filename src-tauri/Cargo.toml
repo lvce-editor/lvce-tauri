@@ -1,0 +1,12 @@
+[package]
+name = "lvce-tauri"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+command-group = "5.0.1"
+serde_json = "1"

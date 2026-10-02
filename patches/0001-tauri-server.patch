@@ -1,0 +1,148 @@
+diff --git a/packages/server/src/server.js b/packages/server/src/server.js
+index d5939c2e652f..3b97716afe1c 100644
+--- a/packages/server/src/server.js
++++ b/packages/server/src/server.js
+@@ -9,6 +9,9 @@ import * as ArgvConfig from './argvConfig.js'
+ import { getRemoteSshOptions, isAuthenticatedRemoteRequest } from './remoteSshOptions.js'
+ import { sendSocket } from './sendSocket.js'
+ 
++import { createAuth } from './tauriAuth.mjs'
++const tauriAuth = createAuth(process.env.LVCE_TAURI_TOKEN)
++
+ const __dirname = dirname(fileURLToPath(import.meta.url))
+ const ROOT = resolve(__dirname, '../../../')
+ 
+@@ -116,15 +119,22 @@ const isStatic = (url) => {
+ }
+ 
+ const handleRequest = (req, res) => {
++  const port = server.address().port
++  if (tauriAuth.bootstrap(req, res, port)) return
++  if (!tauriAuth.authorize(req, port)) {
++    res.writeHead(401)
++    res.end()
++    return
++  }
+   if (remoteSshOptions.enabled) {
+     res.statusCode = 404
+     res.end()
+     return
+   }
+   if (isStatic(req.url)) {
+-    return handleResponseViaProcess(req, res, getOrCreateStaticServerPathProcess, 'StaticServer.getResponse')
++    return handleResponseViaProcess(req, res, getOrCreateStaticServerPathProcess, 'StaticServer.getResponse').catch(() => res.destroy())
+   }
+-  return handleResponseViaProcess(req, res, getOrCreateSharedProcess, 'HandleRequest.handleRequest')
++  return handleResponseViaProcess(req, res, getOrCreateSharedProcess, 'HandleRequest.handleRequest').catch(() => res.destroy())
+ }
+ 
+ const state = {
+@@ -170,14 +180,23 @@ const handleSharedProcessDisconnect = () => {
+   console.info('[server] shared process disconnected')
+ }
+ 
+-const waitForProcessToBeReady = async (childProcess) => {
+-  const { resolve, promise } = Promise.withResolvers()
+-  childProcess.once('message', resolve)
+-  const message = await promise
+-  if (message !== 'ready') {
+-    throw new Error('unexpected message')
+-  }
+-}
++const waitForProcessToBeReady = (childProcess) => new Promise((resolve, reject) => {
++  const finish = (error) => {
++    clearTimeout(timer)
++    childProcess.off('message', onMessage)
++    childProcess.off('error', onError)
++    childProcess.off('exit', onExit)
++    if (error) reject(error)
++    else resolve()
++  }
++  const onMessage = (message) => finish(message === 'ready' ? undefined : new Error('Unexpected backend readiness message'))
++  const onError = (error) => finish(error)
++  const onExit = (code) => finish(new Error(`Backend exited before readiness: ${code}`))
++  const timer = setTimeout(() => finish(new Error('Backend startup timed out')), 30000)
++  childProcess.once('message', onMessage)
++  childProcess.once('error', onError)
++  childProcess.once('exit', onExit)
++})
+ 
+ /**
+  *
+@@ -333,8 +352,12 @@ const callbacks = Object.create(null)
+ 
+ const registerCallback = () => {
+   const id = createId()
+-  const { resolve, promise } = Promise.withResolvers()
+-  callbacks[id] = resolve
++  const { resolve, reject, promise } = Promise.withResolvers()
++  const timer = setTimeout(() => {
++    delete callbacks[id]
++    reject(new Error('Backend RPC timed out'))
++  }, 30000)
++  callbacks[id] = (message) => { clearTimeout(timer); resolve(message) }
+   return {
+     id,
+     promise,
+@@ -401,6 +424,10 @@ const handleResponseViaProcess = async (request, res, getProcess, method, ...par
+  * @param {import('net').Socket} socket
+  */
+ const handleUpgrade = (request, socket) => {
++  if (!tauriAuth.authorize(request, server.address().port)) {
++    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
++    return
++  }
+   if (remoteSshOptions.enabled && !isAuthenticatedRemoteRequest(request, remoteSshOptions)) {
+     socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+     return
+@@ -408,7 +435,7 @@ const handleUpgrade = (request, socket) => {
+   if (remoteSshOptions.enabled) {
+     trackRemoteClient(socket)
+   }
+-  sendHandleSharedProcess(request, socket, 'HandleWebSocket.handleWebSocket')
++  sendHandleSharedProcess(request, socket, 'HandleWebSocket.handleWebSocket').catch(() => socket.destroy())
+ }
+ 
+ const handleServerError = (error) => {
+@@ -429,7 +456,7 @@ const handleAppReady = () => {
+   } else {
+     const address = server.address()
+     const port = typeof address === 'object' && address ? address.port : PORT
+-    console.info(`[server] listening on http://${remoteSshOptions.host}:${port}`)
++    console.info(`LVCE_TAURI_READY http://127.0.0.1:${port}/?tauriToken=${process.env.LVCE_TAURI_TOKEN}`)
+   }
+ }
+ 
+diff --git a/packages/server/src/tauriAuth.mjs b/packages/server/src/tauriAuth.mjs
+new file mode 100644
+index 000000000000..7cdd55848eb7
+--- /dev/null
++++ b/packages/server/src/tauriAuth.mjs
+@@ -0,0 +1,27 @@
++// This file is copied into the pinned server by the maintained source patch.
++export const createAuth = (token) => {
++  if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Missing Tauri session token')
++  const cookieName = `lvce-tauri-${token.slice(0, 16)}`
++  const cookie = `${cookieName}=${token}`
++  const authorize = (request, port) => {
++    const host = `127.0.0.1:${port}`
++    if (request.headers.host !== host) return false
++    if (request.headers.origin && request.headers.origin !== `http://${host}`) return false
++    return (request.headers.cookie || '').split(';').some((part) => part.trim() === cookie)
++  }
++  const bootstrap = (request, response, port) => {
++    const host = `127.0.0.1:${port}`
++    if (request.method !== 'GET' || request.headers.host !== host) return false
++    const url = new URL(request.url, `http://${host}`)
++    if (url.pathname !== '/' || url.searchParams.get('tauriToken') !== token) return false
++    response.writeHead(303, {
++      'Set-Cookie': `${cookie}; HttpOnly; SameSite=Strict; Path=/`,
++      'Location': '/',
++      'Cache-Control': 'no-store',
++      'Referrer-Policy': 'no-referrer',
++    })
++    response.end()
++    return true
++  }
++  return { authorize, bootstrap }
++}
