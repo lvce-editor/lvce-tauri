@@ -69,8 +69,14 @@ fn main() {
         });
     diagnostic("Native window built");
     app.run(|app, event| {
-        if matches!(event, tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }) {
-            app.state::<Backend>().stop();
+        match event {
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::Destroyed,
+                ..
+            }
+            | tauri::RunEvent::Exit
+            | tauri::RunEvent::ExitRequested { .. } => app.state::<Backend>().stop(),
+            _ => {}
         }
     });
 }
