@@ -10,7 +10,17 @@ impl Drop for BackendProcess {
 }
 impl BackendProcess {
     pub fn start(command: &mut Command, timeout: Duration) -> Result<(Self, String), String> {
-        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+        let stderr = match std::env::var_os("LVCE_TAURI_DIAGNOSTICS") {
+            Some(path) => {
+                let mut path = path;
+                path.push(".backend.log");
+                let file = std::fs::OpenOptions::new().create(true).append(true).open(path)
+                    .map_err(|error| error.to_string())?;
+                Stdio::from(file)
+            }
+            None => Stdio::inherit(),
+        };
+        command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(stderr);
         let child = command.group_spawn().map_err(|error| error.to_string())?;
         // Establish ownership before any fallible operation, including readiness parsing.
         let mut owned = Self { child };
