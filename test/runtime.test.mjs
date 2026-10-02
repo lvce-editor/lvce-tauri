@@ -43,7 +43,8 @@ test('staged server authenticates HTTP and websocket access and serves the edito
     })
     assert.equal(await upgradeStatus({}), 401)
     const bootstrap = await fetch(url, { redirect: 'manual' })
-    assert.equal(bootstrap.status, 303)
+    assert.equal(bootstrap.status, 200)
+    assert.match(await bootstrap.text(), /location\.replace/)
     const cookie = bootstrap.headers.get('set-cookie').split(';')[0]
     assert.equal(await upgradeStatus({ Cookie: cookie, Origin: 'http://evil.example' }), 401)
     const page = await fetch(origin, { headers: { cookie } })

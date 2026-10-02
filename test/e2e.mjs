@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -19,7 +20,7 @@ const driver = spawn('tauri-driver', [], {
     XDG_CONFIG_HOME: join(profile, 'config'), XDG_DATA_HOME: join(profile, 'data'),
     XDG_CACHE_HOME: join(profile, 'cache'), XDG_STATE_HOME: join(profile, 'state'),
     APPDATA: join(profile, 'appdata'), LOCALAPPDATA: join(profile, 'localappdata'),
-  }, stdio: ['ignore', 'pipe', 'pipe'],
+  }, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
 })
 let driverLog = ''
 driver.stdout.on('data', (chunk) => { driverLog += chunk })
@@ -66,18 +67,33 @@ try {
     await delay(100)
   }
 } catch (error) {
+  await writeFile('test-results/error.txt', error.stack || String(error))
   if (browser) {
+    const url = new URL(await browser.getUrl().catch(() => 'about:blank'))
+    await writeFile('test-results/location.txt', `${url.origin}${url.pathname}`)
     await browser.saveScreenshot('test-results/failure.png').catch(() => {})
     await writeFile('test-results/page.html', await browser.getPageSource().catch(() => '') )
   }
   throw error
 } finally {
   if (browser) await browser.deleteSession().catch(() => {})
-  if (driver.exitCode === null && !driverError) {
-    const exited = once(driver, 'exit')
-    driver.kill()
-    await exited
+  const killTree = async (pid) => {
+    if (!pid) return
+    if (process.platform === 'win32') {
+      await promisify(execFile)('taskkill', ['/PID', `${pid}`, '/T', '/F']).catch(() => {})
+    } else {
+      try { process.kill(-pid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+    }
   }
+  // WebDriver may forcibly terminate the native host when deleting a failed session.
+  // Always clean up both owned groups; the success path above still asserts normal exit.
+  if (!driverError) {
+    const closed = driver.exitCode === null ? once(driver, 'close') : undefined
+    await killTree(driver.pid)
+    if (closed) await closed
+  }
+  const savedPid = await readFile(pidFile, 'utf8').catch(() => '')
+  if (savedPid) await killTree(Number(savedPid))
   await writeFile('test-results/driver.log', driverLog)
-  await rm(profile, { recursive: true, force: true })
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }

@@ -11,7 +11,7 @@ npm ci
 npm run prepare:lvce
 npm run build:runtime
 npm test
-npm run build
+npm run build -- -- --locked
 ```
 
 `lvce-source.json` pins the upstream repository and commit. `prepare:lvce` clones that commit and applies the ordered `patches/*.patch` with `git apply --check`; conflicts fail the build. It deliberately refuses to apply patches twice. Preserve any work in `vendor/lvce-editor` before removing that generated checkout to prepare again. Dependency versions come from the pinned upstream lockfile; packaging copies that installed production graph without resolving floating ranges again. Native modules and the included Node binary are built/staged on each target OS, so cross-compilation is not supported.

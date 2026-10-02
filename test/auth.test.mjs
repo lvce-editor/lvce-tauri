@@ -18,8 +18,8 @@ test('exchanges bootstrap token for a protected cookie and removes token from na
   let result
   const response = { writeHead: (...args) => result = args, end() {} }
   assert.equal(auth.bootstrap({ ...request(), method: 'GET', url: `/?tauriToken=${token}` }, response, 3456), true)
-  assert.equal(result[0], 303)
-  assert.equal(result[1].Location, '/')
+  assert.equal(result[0], 200)
+  assert.match(result[1]['Content-Security-Policy'], /script-src 'sha256-/)
   assert.match(result[1]['Set-Cookie'], /HttpOnly; SameSite=Strict/)
   assert.equal(auth.bootstrap({ ...request(), method: 'GET', url: '/?tauriToken=wrong' }, response, 3456), false)
 })

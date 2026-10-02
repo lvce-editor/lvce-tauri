@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 // This file is copied into the pinned server by the maintained source patch.
 export const createAuth = (token) => {
   if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Missing Tauri session token')
@@ -14,13 +15,16 @@ export const createAuth = (token) => {
     if (request.method !== 'GET' || request.headers.host !== host) return false
     const url = new URL(request.url, `http://${host}`)
     if (url.pathname !== '/' || url.searchParams.get('tauriToken') !== token) return false
-    response.writeHead(303, {
+    const script = "location.replace('/')"
+    const hash = createHash('sha256').update(script).digest('base64')
+    response.writeHead(200, {
       'Set-Cookie': `${cookie}; HttpOnly; SameSite=Strict; Path=/`,
-      'Location': '/',
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': `default-src 'none'; script-src 'sha256-${hash}'; base-uri 'none'; frame-ancestors 'none'`,
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
     })
-    response.end()
+    response.end(`<!doctype html><html><head><meta charset="utf-8"><title>Opening LVCE Editor</title></head><body><script>${script}</script></body></html>`)
     return true
   }
   return { authorize, bootstrap }
