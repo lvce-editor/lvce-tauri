@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { test } from 'node:test'
+import { cloneSource } from '../scripts/clone-source.mjs'
+import { run } from '../scripts/exec.mjs'
+
+test('clone and patch work with inherited Windows CRLF settings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-clone-'))
+  try {
+    const repository = join(root, 'source')
+    const target = join(root, 'target')
+    await mkdir(repository)
+    run('git', ['init', repository], { stdio: 'pipe' })
+    const options = { cwd: repository, stdio: 'pipe' }
+    const content = 'first line\nsecond line\n'
+    await writeFile(join(repository, 'file.txt'), content)
+    run('git', ['-c', 'core.autocrlf=false', 'add', '.'], options)
+    run('git', ['-c', 'user.name=levivilet', '-c', 'user.email=72156503+levivilet@users.noreply.github.com', 'commit', '-m', 'fixture'], options)
+    const revision = run('git', ['rev-parse', 'HEAD'], options)
+    const config = join(root, 'gitconfig')
+    await writeFile(config, '[core]\n autocrlf = true\n eol = crlf\n')
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: config }
+    cloneSource({ repository, revision }, target, { env, stdio: 'pipe' })
+    assert.equal(await readFile(join(target, 'file.txt'), 'utf8'), content)
+    const patch = join(root, 'change.patch')
+    await writeFile(patch, 'diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1,2 +1,2 @@\n first line\n-second line\n+patched line\n')
+    run('git', ['apply', '--check', patch], { cwd: target, env, stdio: 'pipe' })
+    run('git', ['apply', patch], { cwd: target, env, stdio: 'pipe' })
+    assert.equal(await readFile(join(target, 'file.txt'), 'utf8'), 'first line\npatched line\n')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('checked-in patch stays LF and applies to the pinned upstream source', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-patch-'))
+  try {
+    const directory = join(root, 'packages/server/src')
+    await mkdir(directory, { recursive: true })
+    run('git', ['init', root], { stdio: 'pipe' })
+    const original = run('git', ['show', 'HEAD:packages/server/src/server.js'], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+    await writeFile(join(directory, 'server.js'), original)
+    const patch = resolve('patches/0001-tauri-server.patch')
+    const content = await readFile(patch, 'utf8')
+    assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    const crlfPatch = join(root, 'crlf.patch')
+    await writeFile(crlfPatch, content.replaceAll('\n', '\r\n'))
+    assert.throws(() => run('git', ['apply', '--check', crlfPatch], { cwd: root, stdio: 'pipe' }))
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

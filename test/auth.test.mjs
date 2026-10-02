@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { readFile } from 'node:fs/promises'
 import { createAuth } from '../runtime/auth.mjs'
 const token = 'a'.repeat(64)
 const auth = createAuth(token)
@@ -23,3 +24,7 @@ test('exchanges bootstrap token for a protected cookie and removes token from na
   assert.equal(auth.bootstrap({ ...request(), method: 'GET', url: '/?tauriToken=wrong' }, response, 3456), false)
 })
 test('requires a strong session token', () => assert.throws(() => createAuth('')))
+
+test('the staged server uses the tested authentication implementation', async () => {
+  assert.equal(await readFile('src-tauri/resources/node_modules/@lvce-editor/server/src/tauriAuth.mjs', 'utf8'), await readFile('runtime/auth.mjs', 'utf8'))
+})

@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
+import { request } from 'node:http'
 
 test('staged server authenticates HTTP and websocket access and serves the editor', { timeout: 60000 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-server-'))
@@ -29,9 +30,22 @@ test('staged server authenticates HTTP and websocket access and serves the edito
     })
     const origin = new URL(url).origin
     assert.equal((await fetch(origin)).status, 401)
+    const upgradeStatus = (headers) => new Promise((resolve, reject) => {
+      const req = request(`${origin}/websocket/shared-process`, { headers: {
+        Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13',
+        'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', ...headers,
+      } })
+      req.once('response', (res) => { res.resume(); resolve(res.statusCode) })
+      req.once('upgrade', (_res, socket) => { socket.destroy(); reject(new Error('Unauthorized websocket accepted')) })
+      req.once('error', reject)
+      req.setTimeout(5000, () => req.destroy(new Error('WebSocket auth timed out')))
+      req.end()
+    })
+    assert.equal(await upgradeStatus({}), 401)
     const bootstrap = await fetch(url, { redirect: 'manual' })
     assert.equal(bootstrap.status, 303)
     const cookie = bootstrap.headers.get('set-cookie').split(';')[0]
+    assert.equal(await upgradeStatus({ Cookie: cookie, Origin: 'http://evil.example' }), 401)
     const page = await fetch(origin, { headers: { cookie } })
     assert.equal(page.status, 200)
     assert.match(await page.text(), /<html/i)
