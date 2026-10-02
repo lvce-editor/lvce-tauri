@@ -8,5 +8,5 @@ process.env.PORT = '0'
 if (!process.env.LVCE_TAURI_WORKSPACE) throw new Error('Missing workspace directory')
 process.env.FOLDER = process.env.LVCE_TAURI_WORKSPACE
 process.env.LVCE_TAURI_TOKEN = randomBytes(32).toString('hex')
-process.argv = [process.execPath, join(root, 'node_modules/@lvce-editor/server/bin/server.js'), process.env.LVCE_TAURI_WORKSPACE]
-await import(pathToFileURL(process.argv[1]))
+process.argv = [process.execPath, join(root, 'node_modules/@lvce-editor/server/bin/server.js'), process.env.LVCE_TAURI_WORKSPACE!]
+await import(pathToFileURL(process.argv[1]).href)

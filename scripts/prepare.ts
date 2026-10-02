@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { run, npm } from './exec.mjs'
-import { cloneSource } from './clone-source.mjs'
-const source = JSON.parse(await readFile('lvce-source.json'))
+import { run, npm } from './exec.js'
+import { cloneSource } from './clone-source.js'
+const source = JSON.parse((await readFile('lvce-source.json')).toString())
 const cwd = resolve('vendor/lvce-editor')
 if (!existsSync(cwd)) {
   cloneSource(source, cwd)

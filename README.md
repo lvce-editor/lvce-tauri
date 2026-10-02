@@ -8,6 +8,7 @@ Install Node **24.15.0**, Rust stable, and [Tauri's platform prerequisites](http
 
 ```sh
 npm ci
+npm run typecheck
 npm run prepare:lvce
 npm run build:runtime
 npm test
@@ -15,6 +16,8 @@ npm run build -- -- --locked
 ```
 
 `lvce-source.json` pins the upstream repository and commit. `prepare:lvce` clones that commit and applies the ordered `patches/*.patch` with `git apply --check`; conflicts fail the build. It deliberately refuses to apply patches twice. Preserve any work in `vendor/lvce-editor` before removing that generated checkout to prepare again. Dependency versions come from the pinned upstream lockfile; packaging copies that installed production graph without resolving floating ranges again. Native modules and the included Node binary are built/staged on each target OS, so cross-compilation is not supported.
+
+Maintained scripts, runtime modules, tests, and the browser bootstrap are TypeScript. `typecheck` checks them without emitting files; build and test commands compile them under `.tmp/tsc`. The browser entry point and HTML are copied there as the Tauri frontend, and the packaged Node runtime uses the emitted JavaScript modules.
 
 ## Run
 

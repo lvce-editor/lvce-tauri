@@ -4,12 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare:lvce": "node scripts/prepare.mjs",
-    "build:runtime": "node scripts/build-runtime.mjs",
+    "typecheck": "tsc --noEmit",
+    "compile": "tsc",
+    "prepare:lvce": "npm run compile && node .tmp/tsc/scripts/prepare.js",
+    "build:runtime": "npm run compile && node .tmp/tsc/scripts/build-runtime.js",
     "build": "tauri build",
-    "test": "node --test test/*.test.mjs",
-    "test:e2e": "node test/e2e.mjs"
+    "test": "npm run compile && node --test .tmp/tsc/test/*.test.js",
+    "test:e2e": "npm run compile && node .tmp/tsc/test/e2e.js"
   },
-  "engines": { "node": "24.15.0" },
-  "devDependencies": { "@tauri-apps/cli": "2.8.4", "webdriverio": "9.20.0" }
+  "engines": {
+    "node": "24.15.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.8.4",
+    "@types/node": "24.19.0",
+    "typescript": "5.9.3",
+    "webdriverio": "9.20.0"
+  }
 }

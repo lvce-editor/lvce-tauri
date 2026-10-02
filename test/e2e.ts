@@ -38,9 +38,11 @@ try {
     if (Date.now() >= deadline) throw new Error(`Driver startup timed out: ${driverLog}`)
     await delay(100)
   }
+  const binary = process.env.TAURI_TEST_BINARY
+  if (!binary) throw new Error('TAURI_TEST_BINARY must point to the packaged application')
   browser = await remote({
     hostname: '127.0.0.1', port: 4444, logLevel: 'warn',
-    capabilities: { 'tauri:options': { application: resolve(process.env.TAURI_TEST_BINARY) } },
+    capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
@@ -66,12 +68,15 @@ try {
   browser = undefined
   const stopDeadline = Date.now() + 10000
   while (true) {
-    try { process.kill(backendPid, 0) } catch (error) { if (error.code === 'ESRCH') break; throw error }
+    try { process.kill(backendPid, 0) } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ESRCH') break
+      throw error
+    }
     if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} survived window close`)
     await delay(100)
   }
 } catch (error) {
-  await writeFile('test-results/error.txt', error.stack || String(error))
+  await writeFile('test-results/error.txt', error instanceof Error ? error.stack || error.message : String(error))
   if (process.platform === 'win32') {
     const inventory = await promisify(execFile)('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Where-Object { $_.Name -match "lvce-tauri|msedge|WebView" } | Select-Object Name,ProcessId,ParentProcessId,CommandLine | ConvertTo-Json']).catch((error) => ({ stdout: String(error) }))
     await writeFile('test-results/windows-processes.json', inventory.stdout)
@@ -85,12 +90,14 @@ try {
   throw error
 } finally {
   if (browser) await browser.deleteSession().catch(() => {})
-  const killTree = async (pid) => {
+  const killTree = async (pid: number | undefined) => {
     if (!pid) return
     if (process.platform === 'win32') {
       await promisify(execFile)('taskkill', ['/PID', `${pid}`, '/T', '/F']).catch(() => {})
     } else {
-      try { process.kill(-pid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+      try { process.kill(-pid, 'SIGKILL') } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') throw error
+      }
     }
   }
   // WebDriver may forcibly terminate the native host when deleting a failed session.

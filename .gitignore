@@ -1,4 +1,5 @@
 node_modules/
+.tmp/
 vendor/
 src-tauri/target/
 src-tauri/resources/

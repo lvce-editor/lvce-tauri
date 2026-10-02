@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
-import { cloneSource } from '../scripts/clone-source.mjs'
-import { run } from '../scripts/exec.mjs'
+import { cloneSource } from '../scripts/clone-source.js'
+import { run } from '../scripts/exec.js'
 
 test('clone and patch work with inherited Windows CRLF settings', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-clone-'))
@@ -13,7 +13,7 @@ test('clone and patch work with inherited Windows CRLF settings', async () => {
     const target = join(root, 'target')
     await mkdir(repository)
     run('git', ['init', repository], { stdio: 'pipe' })
-    const options = { cwd: repository, stdio: 'pipe' }
+    const options = { cwd: repository, stdio: 'pipe' as const }
     const content = 'first line\nsecond line\n'
     await writeFile(join(repository, 'file.txt'), content)
     run('git', ['-c', 'core.autocrlf=false', 'add', '.'], options)

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "io.github.lvce-editor.tauri",
   "build": {
-    "frontendDist": "../frontend"
+    "frontendDist": "../.tmp/tsc/frontend"
   },
   "app": {
     "withGlobalTauri": true,

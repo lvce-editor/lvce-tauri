@@ -35,7 +35,7 @@ fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
     let workspace = std::env::var_os("LVCE_TAURI_WORKSPACE").map(std::path::PathBuf::from).unwrap_or_else(|| profile.join("workspace"));
     std::fs::create_dir_all(&workspace).map_err(|e| e.to_string())?;
     let mut command = Command::new(root.join(if cfg!(windows) { "node.exe" } else { "node" }));
-    command.arg(root.join("launch.mjs")).current_dir(&root)
+    command.arg(root.join("launch.js")).current_dir(&root)
         .env("LVCE_TAURI_WORKSPACE", workspace)
         .env("XDG_CONFIG_HOME", profile.join("config"))
         .env("XDG_DATA_HOME", profile.join("data"))
