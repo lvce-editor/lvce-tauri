@@ -1,0 +1,17 @@
+{
+  "name": "lvce-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 130
+  },
+  "devDependencies": {
+    "prettier": "^3.8.0"
+  }
+}
