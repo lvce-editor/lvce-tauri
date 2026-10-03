@@ -61,3 +61,21 @@ test('checked-in patch stays LF and applies to the pinned upstream source', asyn
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Tauri product name patch applies to the pinned upstream build', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-product-name-patch-'))
+  try {
+    const sourcePath = 'packages/build/src/parts/BuildStaticServer/BuildStaticServer.ts'
+    const source = join(root, sourcePath)
+    await mkdir(join(root, 'packages/build/src/parts/BuildStaticServer'), { recursive: true })
+    run('git', ['init', root], { stdio: 'pipe' })
+    const original = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+    await writeFile(source, original)
+    const patch = resolve('patches/0002-tauri-product-name.patch')
+    const content = await readFile(patch, 'utf8')
+    assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
