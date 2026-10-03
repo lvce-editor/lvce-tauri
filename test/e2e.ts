@@ -64,7 +64,6 @@ try {
     logLevel: 'warn',
     capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
-  assert.equal(await browser.getTitle(), 'Lvce - Tauri')
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
   await file.doubleClick()

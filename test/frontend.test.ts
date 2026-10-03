@@ -5,6 +5,7 @@ import { test } from 'node:test'
 test('frontend loads the emitted TypeScript bootstrap as a module', async () => {
   const index = await readFile('frontend/index.html', 'utf8')
   assert.match(index, /<script type="module" src="start\.js"><\/script>/)
+  assert.match(index, /<title>Lvce - Tauri<\/title>/)
 })
 
 test('Tauri registers the capability needed to close the main window', async () => {
