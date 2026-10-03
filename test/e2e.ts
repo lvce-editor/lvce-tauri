@@ -155,7 +155,9 @@ try {
     } catch (error) {
       if (
         !(error instanceof Error) ||
-        !/All window handles were removed|Session terminated without a reply|invalid session id/.test(error.message)
+        !/All window handles were removed|Session terminated without a reply|invalid session id|no such window/.test(
+          error.message,
+        )
       ) {
         throw error
       }
