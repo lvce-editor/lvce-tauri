@@ -8,5 +8,8 @@ interface Window {
         close(): Promise<void>
       }
     }
+    dialog: {
+      open(options: { directory: true; multiple: false; title: string }): Promise<string | null>
+    }
   }
 }
