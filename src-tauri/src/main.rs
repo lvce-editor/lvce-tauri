@@ -13,20 +13,6 @@ use tauri::Manager;
 
 static NEXT_WINDOW_ID: AtomicU64 = AtomicU64::new(1);
 
-const NATIVE_FOLDER_PICKER_BRIDGE: &str = r#"(() => {
-  const channel = new BroadcastChannel('lvce-tauri-folder-picker');
-  channel.onmessage = async ({ data }) => {
-    if (data?.type !== 'open-folder' || typeof data.id !== 'string') return;
-    channel.postMessage({ type: 'ready', id: data.id });
-    try {
-      const path = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Open Folder' });
-      channel.postMessage({ type: 'result', id: data.id, path });
-    } catch (error) {
-      channel.postMessage({ type: 'result', id: data.id, error: String(error) });
-    }
-  };
-})()"#;
-
 #[derive(Default)]
 struct Backend(Mutex<BackendState>);
 
@@ -104,6 +90,7 @@ fn add_editor_capability(app: &tauri::AppHandle, label: &str, url: &tauri::Url) 
             .window(label)
             .remote(format!("{}/*", url.origin().ascii_serialization()))
             .permission("core:window:allow-close")
+            .permission("allow-open-new-window")
             .permission("allow-toggle-devtools")
             .permission("allow-is-devtools-open")
             .permission("dialog:allow-open"),
@@ -168,18 +155,6 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(Backend::default())
-        .on_page_load(|window, payload| {
-            let url = payload.url();
-            if payload.event() == tauri::webview::PageLoadEvent::Finished
-                && url.scheme() == "http"
-                && url.host_str() == Some("127.0.0.1")
-                && url.port().is_some()
-            {
-                if let Err(error) = window.eval(NATIVE_FOLDER_PICKER_BRIDGE) {
-                    diagnostic(&format!("Could not install native folder picker bridge: {error}"));
-                }
-            }
-        })
         .on_window_event(|window, event| {
             if matches!(
                 event,

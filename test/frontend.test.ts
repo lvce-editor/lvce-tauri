@@ -21,6 +21,7 @@ test('Tauri release builds include webview developer tools', async () => {
   assert.match(cargo, /features\s*=\s*\["devtools"\]/)
   assert.match(main, /generate_handler!\[open_editor, open_new_window, toggle_devtools, is_devtools_open\]/)
   assert.match(main, /WebviewWindowBuilder::new\(&app, &label, tauri::WebviewUrl::External\(url\)\)/)
+  assert.match(main, /permission\("allow-open-new-window"\)/)
   assert.match(main, /permission\("allow-toggle-devtools"\)/)
 })
 
@@ -36,6 +37,4 @@ test('Tauri grants its remote editor access to the native directory picker', asy
   assert.match(cargo, /^tauri-plugin-dialog\s*=\s*"2"$/m)
   assert.match(main, /\.plugin\(tauri_plugin_dialog::init\(\)\)/)
   assert.match(main, /\.permission\("dialog:allow-open"\)/)
-  assert.match(main, /\.on_page_load\(/)
-  assert.match(main, /lvce-tauri-folder-picker/)
 })

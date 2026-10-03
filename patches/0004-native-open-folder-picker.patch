@@ -1,43 +1,19 @@
 diff --git a/packages/renderer-worker/src/parts/OpenFolderRemote/OpenFolderRemote.js b/packages/renderer-worker/src/parts/OpenFolderRemote/OpenFolderRemote.js
-index 1c9ccb9fcc86..24749cf01974 100644
+index 1c9ccb9fcc86..7d0f2f562b0b 100644
 --- a/packages/renderer-worker/src/parts/OpenFolderRemote/OpenFolderRemote.js
 +++ b/packages/renderer-worker/src/parts/OpenFolderRemote/OpenFolderRemote.js
-@@ -2,8 +2,37 @@ import * as Command from '../Command/Command.js'
+@@ -1,9 +1,13 @@
+ import * as Command from '../Command/Command.js'
  import * as PathToFileUri from '../PathToFileUri/PathToFileUri.js'
  import * as Prompt from '../Prompt/Prompt.js'
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
  
-+const openNativeFolder = () =>
-+  new Promise((resolve, reject) => {
-+    const channel = new BroadcastChannel('lvce-tauri-folder-picker')
-+    const id = crypto.randomUUID()
-+    const timeout = setTimeout(() => {
-+      channel.close()
-+      resolve({ native: false })
-+    }, 250)
-+    channel.onmessage = ({ data }) => {
-+      if (data?.id !== id) {
-+        return
-+      }
-+      if (data.type === 'ready') {
-+        clearTimeout(timeout)
-+        return
-+      }
-+      if (data.type === 'result') {
-+        channel.close()
-+        if (data.error) {
-+          reject(new Error(data.error))
-+        } else {
-+          resolve({ native: true, path: data.path })
-+        }
-+      }
-+    }
-+    channel.postMessage({ type: 'open-folder', id })
-+  })
-+
  export const openFolder = async () => {
 -  const path = await Prompt.prompt('Choose Path:', '/home')
-+  const result = typeof BroadcastChannel === 'function' ? await openNativeFolder() : { native: false }
-+  const path = result.native ? result.path : await Prompt.prompt('Choose Path:', '/home')
++  const isTauri = await RendererProcess.invoke('Tauri.isAvailable')
++  const path = isTauri
++    ? await RendererProcess.invoke('Tauri.openFolder')
++    : await Prompt.prompt('Choose Path:', '/home')
    if (!path) {
      return
    }

@@ -205,6 +205,15 @@ try {
   const thirdWindow = await openNewWindow()
   await browser.switchToWindow(thirdWindow)
   await browser.$('.EditorRows').waitForExist({ timeout: 30000 })
+  await setFolderPickerResult(selectedWorkspace)
+  await openFolderMenu()
+  await browser.$('[role="treeitem"][aria-label="selected.txt"]').waitForExist({ timeout: 30000 })
+  const secondaryFolderDialogOptions = await browser.execute(
+    () =>
+      (window as unknown as { __folderDialogOptions: { directory: boolean; multiple: boolean; title: string } })
+        .__folderDialogOptions,
+  )
+  assert.deepEqual(secondaryFolderDialogOptions, { directory: true, multiple: false, title: 'Open Folder' })
   assertBackendAlive()
 
   await browser.switchToWindow(secondWindow)

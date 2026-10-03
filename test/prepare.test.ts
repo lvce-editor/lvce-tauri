@@ -118,7 +118,7 @@ test('native folder picker patch applies to the pinned upstream renderer', async
     run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
     run('git', ['apply', patch], { cwd: root, stdio: 'pipe' })
     const patched = await readFile(target, 'utf8')
-    assert.match(patched, /BroadcastChannel\('lvce-tauri-folder-picker'\)/)
+    assert.match(patched, /RendererProcess\.invoke\('Tauri\.openFolder'\)/)
     assert.match(patched, /Prompt\.prompt\('Choose Path:', '\/home'\)/)
   } finally {
     await rm(root, { recursive: true, force: true })
