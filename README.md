@@ -23,7 +23,7 @@ Maintained scripts, runtime modules, tests, and the browser bootstrap are TypeSc
 
 Install the artifact from CI or `src-tauri/target/release/bundle`. The default workspace is an empty `workspace` directory in the application's data directory. Set `LVCE_TAURI_WORKSPACE` to an existing directory before starting the application to edit your files. The prototype has its own LVCE configuration, data, cache, and state directories.
 
-Open `smoke.txt` in the explorer, edit it, and press Ctrl+S (Cmd+S on macOS). Verify the saved bytes on disk. Closing the window stops the backend process group, including its Node children.
+Open `smoke.txt` in the explorer, edit it, and press Ctrl+S (Cmd+S on macOS). Verify the saved bytes on disk. Use File → Open Folder to select a directory whose path contains spaces and non-ASCII characters, and verify its files appear. Open the picker again and cancel; the current workspace should remain open. Closing the window stops the backend process group, including its Node children.
 
 ## Architecture and limits
 
@@ -35,7 +35,7 @@ This is the server edition in a native shell, not Electron feature parity. Nativ
 
 ## Validation
 
-CI builds Debian, Windows NSIS, and macOS app artifacts. Each OS runs authentication and staged-server integration tests. Linux and Windows additionally install/extract the built artifact and use `tauri-driver` to open, edit and save a file, then verify backend exit after closing the window. Failures retain a screenshot, DOM and driver log.
+CI builds Debian, Windows NSIS, and macOS app artifacts. Each OS runs authentication and staged-server integration tests. Linux and Windows additionally install/extract the built artifact and use `tauri-driver` to open, edit and save a file, exercise folder-selection routing with paths containing spaces and non-ASCII characters, verify cancellation and repeated opening, then verify backend exit after closing the window. Failures retain a screenshot, DOM and driver log.
 
 macOS currently has build/backend coverage and the manual smoke flow above. This prototype uses the direct native-driver route; Tauri's [WebDriver documentation](https://v2.tauri.app/develop/tests/webdriver/) distinguishes that route from the newer embedded WebdriverIO service that can support macOS. Integrating that service is not claimed here. The native UI smoke must be run manually on macOS before relying on it there.
 

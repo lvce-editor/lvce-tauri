@@ -4,6 +4,20 @@ use backend::BackendProcess;
 use std::{process::Command, sync::Mutex, time::Duration};
 use tauri::Manager;
 
+const NATIVE_FOLDER_PICKER_BRIDGE: &str = r#"(() => {
+  const channel = new BroadcastChannel('lvce-tauri-folder-picker');
+  channel.onmessage = async ({ data }) => {
+    if (data?.type !== 'open-folder' || typeof data.id !== 'string') return;
+    channel.postMessage({ type: 'ready', id: data.id });
+    try {
+      const path = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Open Folder' });
+      channel.postMessage({ type: 'result', id: data.id, path });
+    } catch (error) {
+      channel.postMessage({ type: 'result', id: data.id, error: String(error) });
+    }
+  };
+})()"#;
+
 #[derive(Default)]
 struct Backend(Mutex<Option<BackendProcess>>);
 impl Backend {
@@ -32,6 +46,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
                 .permission("core:window:allow-close")
                 .permission("allow-toggle-devtools")
                 .permission("allow-is-devtools-open")
+                .permission("dialog:allow-open")
         ).map_err(|e| e.to_string())?;
         window.navigate(url).map_err(|e| e.to_string())
     })();
@@ -96,7 +111,20 @@ fn diagnostic(message: &str) {
 fn main() {
     diagnostic("Native host started");
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Backend::default())
+        .on_page_load(|window, payload| {
+            let url = payload.url();
+            if payload.event() == tauri::webview::PageLoadEvent::Finished
+                && url.scheme() == "http"
+                && url.host_str() == Some("127.0.0.1")
+                && url.port().is_some()
+            {
+                if let Err(error) = window.eval(NATIVE_FOLDER_PICKER_BRIDGE) {
+                    diagnostic(&format!("Could not install native folder picker bridge: {error}"));
+                }
+            }
+        })
         .on_window_event(|window, event| {
             if matches!(
                 event,

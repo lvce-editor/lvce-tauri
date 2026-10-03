@@ -102,3 +102,25 @@ test('Tauri developer tools patch applies to the pinned upstream renderer', asyn
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('native folder picker patch applies to the pinned upstream renderer', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-folder-picker-patch-'))
+  try {
+    const sourcePath = 'packages/renderer-worker/src/parts/OpenFolderRemote/OpenFolderRemote.js'
+    const target = join(root, sourcePath)
+    await mkdir(join(root, 'packages/renderer-worker/src/parts/OpenFolderRemote'), { recursive: true })
+    run('git', ['init', root], { stdio: 'pipe' })
+    const source = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+    await writeFile(target, source)
+    const patch = resolve('patches/0004-native-open-folder-picker.patch')
+    const content = await readFile(patch, 'utf8')
+    assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+    run('git', ['apply', patch], { cwd: root, stdio: 'pipe' })
+    const patched = await readFile(target, 'utf8')
+    assert.match(patched, /BroadcastChannel\('lvce-tauri-folder-picker'\)/)
+    assert.match(patched, /Prompt\.prompt\('Choose Path:', '\/home'\)/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

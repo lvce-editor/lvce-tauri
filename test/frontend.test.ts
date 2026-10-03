@@ -27,3 +27,13 @@ test('Tauri app and window use the product name', async () => {
   assert.equal(config.productName, 'Lvce - Tauri')
   assert.equal(config.app.windows[0].title, 'Lvce - Tauri')
 })
+
+test('Tauri grants its remote editor access to the native directory picker', async () => {
+  const main = await readFile('src-tauri/src/main.rs', 'utf8')
+  const cargo = await readFile('src-tauri/Cargo.toml', 'utf8')
+  assert.match(cargo, /^tauri-plugin-dialog\s*=\s*"2"$/m)
+  assert.match(main, /\.plugin\(tauri_plugin_dialog::init\(\)\)/)
+  assert.match(main, /\.permission\("dialog:allow-open"\)/)
+  assert.match(main, /\.on_page_load\(/)
+  assert.match(main, /lvce-tauri-folder-picker/)
+})

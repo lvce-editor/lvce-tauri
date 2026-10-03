@@ -11,11 +11,17 @@ import { remote, Key } from 'webdriverio'
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
+const selectedWorkspace = join(profile, 'workspace with spaces', '日本語')
+const secondSelectedWorkspace = join(profile, 'second workspace')
 await mkdir(workspace)
+await mkdir(selectedWorkspace, { recursive: true })
+await mkdir(secondSelectedWorkspace)
 await mkdir('test-results', { recursive: true })
 const checkpoint = (message: string) => appendFileSync('test-results/e2e-startup.log', `${new Date().toISOString()} ${message}\n`)
 checkpoint(`Test runner started: ${process.execPath} (${process.pid})`)
 await writeFile(join(workspace, 'smoke.txt'), 'before\n')
+await writeFile(join(selectedWorkspace, 'selected.txt'), 'selected\n')
+await writeFile(join(secondSelectedWorkspace, 'second.txt'), 'second\n')
 const pidFile = join(profile, 'backend.pid')
 const diagnosticsFile = resolve('test-results/native-startup.log')
 await writeFile(diagnosticsFile, '')
@@ -116,6 +122,35 @@ try {
       })
     }
   }
+  const openFolderMenu = async () => {
+    await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
+    await activeBrowser.$('//*[normalize-space(text())="Open Folder"]').click()
+  }
+  const setFolderPickerResult = async (path: string | null) => {
+    await activeBrowser.execute((selectedPath: string | null) => {
+      window.__TAURI__.dialog.open = async (options: unknown) => {
+        ;(window as unknown as { __folderDialogOptions: unknown }).__folderDialogOptions = options
+        return selectedPath
+      }
+    }, path)
+  }
+  const selectFolder = async (path: string) => {
+    await setFolderPickerResult(path)
+    await openFolderMenu()
+  }
+  await selectFolder(selectedWorkspace)
+  await browser.$('[role="treeitem"][aria-label="selected.txt"]').waitForExist({ timeout: 30000 })
+  const folderDialogOptions = await browser.execute(
+    () =>
+      (window as unknown as { __folderDialogOptions: { directory: boolean; multiple: boolean; title: string } })
+        .__folderDialogOptions,
+  )
+  assert.deepEqual(folderDialogOptions, { directory: true, multiple: false, title: 'Open Folder' })
+  await setFolderPickerResult(null)
+  await openFolderMenu()
+  await browser.$('[role="treeitem"][aria-label="selected.txt"]').waitForExist({ timeout: 30000 })
+  await selectFolder(secondSelectedWorkspace)
+  await browser.$('[role="treeitem"][aria-label="second.txt"]').waitForExist({ timeout: 30000 })
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)
   await browser.saveScreenshot('test-results/editor.png')
