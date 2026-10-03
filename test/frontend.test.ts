@@ -22,6 +22,7 @@ test('Tauri release builds include webview developer tools', async () => {
   assert.match(cargo, /features\s*=\s*\["devtools"\]/)
   assert.match(build, /commands\(&\["open_editor", "open_new_window", "toggle_devtools", "is_devtools_open"\]\)/)
   assert.match(main, /generate_handler!\[open_editor, open_new_window, toggle_devtools, is_devtools_open\]/)
+  assert.match(main, /async fn open_new_window\(/)
   assert.match(main, /WebviewWindowBuilder::new\(&app, &label, tauri::WebviewUrl::External\(url\)\)/)
   assert.match(main, /permission\("allow-open-new-window"\)/)
   assert.match(main, /permission\("allow-toggle-devtools"\)/)

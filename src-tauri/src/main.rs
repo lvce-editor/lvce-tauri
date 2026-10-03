@@ -57,7 +57,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
 }
 
 #[tauri::command]
-fn open_new_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_new_window(app: tauri::AppHandle) -> Result<(), String> {
     let url: tauri::Url = app
         .state::<Backend>()
         .url()?
