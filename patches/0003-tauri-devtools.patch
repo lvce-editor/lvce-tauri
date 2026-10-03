@@ -1,26 +1,36 @@
 diff --git a/packages/renderer-worker/src/parts/Devtools/Devtools.js b/packages/renderer-worker/src/parts/Devtools/Devtools.js
-index 0a6a4d7b0c6c..2d1eed36ffb7 100644
+index 0a6a4d7b0c6c..ec08e8b0b5fe 100644
 --- a/packages/renderer-worker/src/parts/Devtools/Devtools.js
 +++ b/packages/renderer-worker/src/parts/Devtools/Devtools.js
-@@ -1,5 +1,8 @@
+@@ -1,5 +1,9 @@
  import * as ElectronWindow from '../ElectronWindow/ElectronWindow.js'
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
  
- export const toggleDeveloperTools = () => {
-+  if (globalThis.__TAURI__?.core?.invoke) {
-+    return globalThis.__TAURI__.core.invoke('toggle_devtools')
+-export const toggleDeveloperTools = () => {
++export const toggleDeveloperTools = async () => {
++  if (await RendererProcess.invoke('Tauri.isAvailable')) {
++    return RendererProcess.invoke('Tauri.toggleDevtools')
 +  }
    return ElectronWindow.toggleDevtools()
  }
 diff --git a/packages/renderer-worker/src/parts/MenuEntriesHelp/MenuEntriesHelp.js b/packages/renderer-worker/src/parts/MenuEntriesHelp/MenuEntriesHelp.js
-index fedcb9220b64..1f1984aa36e2 100644
+index fedcb9220b64..3dfdeb1ec495 100644
 --- a/packages/renderer-worker/src/parts/MenuEntriesHelp/MenuEntriesHelp.js
 +++ b/packages/renderer-worker/src/parts/MenuEntriesHelp/MenuEntriesHelp.js
-@@ -11,7 +11,7 @@ export const id = MenuEntryId.Help
+@@ -4,6 +4,7 @@ import * as MenuEntryId from '../MenuEntryId/MenuEntryId.js'
+ import * as MenuEntrySeparator from '../MenuEntrySeparator/MenuEntrySeparator.js'
+ import * as MenuItemFlags from '../MenuItemFlags/MenuItemFlags.js'
+ import * as Platform from '../Platform/Platform.js'
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
+ import * as PlatformType from '../PlatformType/PlatformType.js'
+ 
+ export const id = MenuEntryId.Help
+@@ -11,7 +12,7 @@ export const id = MenuEntryId.Help
  export const getMenuEntries = async () => {
    const autoUpdateSupported = await IsAutoUpdateSupported.isAutoUpdateSupported()
    const entries = []
 -  if (Platform.getPlatform() !== PlatformType.Web) {
-+  if (Platform.getPlatform() !== PlatformType.Web || globalThis.__TAURI__) {
++  if (Platform.getPlatform() !== PlatformType.Web || (await RendererProcess.invoke('Tauri.isAvailable'))) {
      entries.push(
        {
          id: 'toggleDeveloperTools',

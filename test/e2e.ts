@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { appendFileSync } from 'node:fs'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { once } from 'node:events'
@@ -12,10 +13,13 @@ const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
 await mkdir(workspace)
 await mkdir('test-results', { recursive: true })
+const checkpoint = (message: string) => appendFileSync('test-results/e2e-startup.log', `${new Date().toISOString()} ${message}\n`)
+checkpoint(`Test runner started: ${process.execPath} (${process.pid})`)
 await writeFile(join(workspace, 'smoke.txt'), 'before\n')
 const pidFile = join(profile, 'backend.pid')
 const diagnosticsFile = resolve('test-results/native-startup.log')
 await writeFile(diagnosticsFile, '')
+checkpoint('Starting tauri-driver')
 const driver = spawn('tauri-driver', [], {
   env: {
     ...process.env,
@@ -32,6 +36,7 @@ const driver = spawn('tauri-driver', [], {
   detached: process.platform !== 'win32',
   stdio: ['ignore', 'pipe', 'pipe'],
 })
+checkpoint(`Driver spawned: ${driver.pid}`)
 let driverLog = ''
 driver.stdout.on('data', (chunk) => {
   driverLog += chunk
@@ -58,12 +63,14 @@ try {
   }
   const binary = process.env.TAURI_TEST_BINARY
   if (!binary) throw new Error('TAURI_TEST_BINARY must point to the packaged application')
+  checkpoint('Driver ready; creating WebDriver session')
   browser = await remote({
     hostname: '127.0.0.1',
     port: 4444,
     logLevel: 'warn',
     capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
+  checkpoint('WebDriver session created')
   const activeBrowser = browser
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
@@ -84,24 +91,30 @@ try {
     timeoutMsg: 'Editor did not save the edited text through its Node backend',
   })
   if (process.platform !== 'win32') {
-    const isDevtoolsOpen = async () =>
-      activeBrowser.executeAsync((done: (result: unknown) => void) => {
+    const isDevtoolsOpen = async (): Promise<boolean> => {
+      const result = await activeBrowser.executeAsync((done: (result: unknown) => void) => {
         window.__TAURI__.core.invoke('is_devtools_open').then(done, (error: unknown) => done(String(error)))
       })
+      assert.equal(typeof result, 'boolean', `Native devtools state query failed: ${result}`)
+      return result as boolean
+    }
     const toggleFromHelp = async () => {
       await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="Help"]').click()
       await activeBrowser.$('//*[normalize-space(text())="Toggle Developer Tools"]').click()
     }
-    await toggleFromHelp()
-    await browser.waitUntil(async () => isDevtoolsOpen(), {
-      timeout: 10000,
-      timeoutMsg: 'Help → Toggle Developer Tools did not open the editor webview tools',
-    })
-    await toggleFromHelp()
-    await browser.waitUntil(async () => !(await isDevtoolsOpen()), {
-      timeout: 10000,
-      timeoutMsg: 'Help → Toggle Developer Tools did not close the editor webview tools',
-    })
+    assert.equal(await isDevtoolsOpen(), false)
+    for (let cycle = 0; cycle < 2; cycle++) {
+      await toggleFromHelp()
+      await browser.waitUntil(async () => (await isDevtoolsOpen()) === true, {
+        timeout: 10000,
+        timeoutMsg: 'Help → Toggle Developer Tools did not open the editor webview tools',
+      })
+      await toggleFromHelp()
+      await browser.waitUntil(async () => (await isDevtoolsOpen()) === false, {
+        timeout: 10000,
+        timeoutMsg: 'Help → Toggle Developer Tools did not close the editor webview tools',
+      })
+    }
   }
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)

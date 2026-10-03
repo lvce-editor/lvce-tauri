@@ -20,7 +20,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
     let navigation = (|| -> Result<(), String> {
         let url: tauri::Url = url.parse().map_err(|e| format!("Invalid backend URL: {e}"))?;
         // The editor is served by our ephemeral HTTP backend, not the bundled origin.
-        // Grant only close, for this window and this backend's exact port.
+        // Grant editor commands only to this window and this backend's exact port.
         if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || url.port().is_none() {
             return Err("Unexpected backend origin".into());
         }
@@ -30,6 +30,8 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
                 .window(window.label())
                 .remote(format!("{}/*", url.origin().ascii_serialization()))
                 .permission("core:window:allow-close")
+                .permission("allow-toggle-devtools")
+                .permission("allow-is-devtools-open")
         ).map_err(|e| e.to_string())?;
         window.navigate(url).map_err(|e| e.to_string())
     })();
