@@ -96,7 +96,9 @@ try {
           (error: unknown) => done(`close failed: ${String(error)}`),
         )
     })
-    assert.equal(closeResult, 'closed')
+    // EdgeDriver returns null if native close destroys the script context first.
+    // The native diagnostics and backend PID checks below must still prove cleanup.
+    if (process.platform !== 'win32' || closeResult !== null) assert.equal(closeResult, 'closed')
   } catch (error) {
     // Closing the last native window can destroy the session before its reply arrives.
     // Require independent native-close and process-exit evidence below in either case.
