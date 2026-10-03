@@ -104,9 +104,25 @@ fn add_editor_capability(app: &tauri::AppHandle, label: &str, url: &tauri::Url) 
             .window(label)
             .remote(format!("{}/*", url.origin().ascii_serialization()))
             .permission("core:window:allow-close")
+            .permission("allow-toggle-devtools")
+            .permission("allow-is-devtools-open")
             .permission("dialog:allow-open"),
     )
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
+}
+
+#[tauri::command]
+fn is_devtools_open(window: tauri::WebviewWindow) -> bool {
+    window.is_devtools_open()
 }
 
 fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
@@ -183,7 +199,7 @@ fn main() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![open_editor, open_new_window])
+        .invoke_handler(tauri::generate_handler![open_editor, open_new_window, toggle_devtools, is_devtools_open])
         .build(tauri::generate_context!()).unwrap_or_else(|error| {
             diagnostic(&format!("Failed to build Tauri application: {error}"));
             panic!("Failed to build Tauri application: {error}");
