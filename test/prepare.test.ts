@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { cloneSource } from '../scripts/clone-source.js'
 import { run } from '../scripts/exec.js'
@@ -74,6 +74,29 @@ test('Tauri product name patch applies to the pinned upstream build', async () =
     const patch = resolve('patches/0002-tauri-product-name.patch')
     const content = await readFile(patch, 'utf8')
     assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Tauri developer tools patch applies to the pinned upstream renderer', async () => {
+  const sourcePaths = [
+    'packages/renderer-worker/src/parts/Devtools/Devtools.js',
+    'packages/renderer-worker/src/parts/MenuEntriesHelp/MenuEntriesHelp.js',
+  ]
+  const patch = resolve('patches/0003-tauri-devtools.patch')
+  const patchContent = await readFile(patch, 'utf8')
+  assert.equal(patchContent.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-devtools-patch-'))
+  try {
+    for (const sourcePath of sourcePaths) {
+      const target = join(root, sourcePath)
+      await mkdir(dirname(target), { recursive: true })
+      const source = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+      await writeFile(target, source)
+    }
+    run('git', ['init', root], { stdio: 'pipe' })
     run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
   } finally {
     await rm(root, { recursive: true, force: true })

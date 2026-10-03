@@ -1,5 +1,5 @@
 {
   "identifier": "local-bootstrap",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-close"]
+  "permissions": ["allow-open-editor", "core:default", "core:window:allow-close"]
 }

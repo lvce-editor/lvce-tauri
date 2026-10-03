@@ -34,7 +34,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
     let navigation = (|| -> Result<(), String> {
         let url: tauri::Url = url.parse().map_err(|e| format!("Invalid backend URL: {e}"))?;
         // The editor is served by our ephemeral HTTP backend, not the bundled origin.
-        // Grant only close, for this window and this backend's exact port.
+        // Grant editor commands only to this window and this backend's exact port.
         if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || url.port().is_none() {
             return Err("Unexpected backend origin".into());
         }
@@ -44,6 +44,8 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
                 .window(window.label())
                 .remote(format!("{}/*", url.origin().ascii_serialization()))
                 .permission("core:window:allow-close")
+                .permission("allow-toggle-devtools")
+                .permission("allow-is-devtools-open")
                 .permission("dialog:allow-open")
         ).map_err(|e| e.to_string())?;
         window.navigate(url).map_err(|e| e.to_string())
@@ -53,6 +55,20 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
         return Err(error.to_string());
     }
     Ok(())
+}
+
+#[tauri::command]
+fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
+}
+
+#[tauri::command]
+fn is_devtools_open(window: tauri::WebviewWindow) -> bool {
+    window.is_devtools_open()
 }
 
 fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
@@ -119,7 +135,7 @@ fn main() {
                 diagnostic("Backend stopped after native window close");
             }
         })
-        .invoke_handler(tauri::generate_handler![open_editor])
+        .invoke_handler(tauri::generate_handler![open_editor, toggle_devtools, is_devtools_open])
         .build(tauri::generate_context!()).unwrap_or_else(|error| {
             diagnostic(&format!("Failed to build Tauri application: {error}"));
             panic!("Failed to build Tauri application: {error}");
