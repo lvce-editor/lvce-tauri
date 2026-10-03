@@ -222,12 +222,12 @@ try {
   await closeCurrentWindow()
   assertBackendAlive()
   await browser.switchToWindow(initialWindow)
-  await browser.$('.EditorRows').waitForExist({ timeout: 15000 })
+  await browser.$('.Workbench').waitForExist({ timeout: 15000 })
 
   await closeCurrentWindow()
   assertBackendAlive()
   await browser.switchToWindow(thirdWindow)
-  await browser.$('.EditorRows').waitForExist({ timeout: 15000 })
+  await browser.$('.Workbench').waitForExist({ timeout: 15000 })
   await closeCurrentWindow()
   const stopDeadline = Date.now() + 10000
   while (true) {
