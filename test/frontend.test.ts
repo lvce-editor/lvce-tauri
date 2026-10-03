@@ -17,8 +17,10 @@ test('Tauri registers the capability needed to close the main window', async () 
 
 test('Tauri release builds include webview developer tools', async () => {
   const cargo = await readFile('src-tauri/Cargo.toml', 'utf8')
+  const build = await readFile('src-tauri/build.rs', 'utf8')
   const main = await readFile('src-tauri/src/main.rs', 'utf8')
   assert.match(cargo, /features\s*=\s*\["devtools"\]/)
+  assert.match(build, /commands\(&\["open_editor", "open_new_window", "toggle_devtools", "is_devtools_open"\]\)/)
   assert.match(main, /generate_handler!\[open_editor, open_new_window, toggle_devtools, is_devtools_open\]/)
   assert.match(main, /WebviewWindowBuilder::new\(&app, &label, tauri::WebviewUrl::External\(url\)\)/)
   assert.match(main, /permission\("allow-open-new-window"\)/)
