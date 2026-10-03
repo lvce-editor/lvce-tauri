@@ -2,16 +2,31 @@
   "name": "lvce-tauri",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "compile": "tsc",
+    "prepare:lvce": "npm run compile && node .tmp/tsc/scripts/prepare.js",
+    "build:runtime": "npm run compile && node .tmp/tsc/scripts/build-runtime.js",
+    "build": "tauri build",
+    "test": "npm run compile && node --test .tmp/tsc/test/*.test.js",
+    "test:e2e": "npm run compile && node .tmp/tsc/test/e2e.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
+  },
+  "engines": {
+    "node": "24.15.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.8.4",
+    "@types/node": "24.19.0",
+    "typescript": "5.9.3",
+    "webdriverio": "9.20.0",
+    "prettier": "^3.8.0"
   },
   "prettier": {
     "semi": false,
     "singleQuote": true,
     "printWidth": 130
-  },
-  "devDependencies": {
-    "prettier": "^3.8.0"
   }
 }
