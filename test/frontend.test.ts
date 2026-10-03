@@ -17,9 +17,15 @@ test('Tauri registers the capability needed to close the main window', async () 
 
 test('Tauri release builds include webview developer tools', async () => {
   const cargo = await readFile('src-tauri/Cargo.toml', 'utf8')
+  const build = await readFile('src-tauri/build.rs', 'utf8')
   const main = await readFile('src-tauri/src/main.rs', 'utf8')
   assert.match(cargo, /features\s*=\s*\["devtools"\]/)
-  assert.match(main, /generate_handler!\[open_editor, toggle_devtools, is_devtools_open\]/)
+  assert.match(build, /commands\(&\["open_editor", "open_new_window", "toggle_devtools", "is_devtools_open"\]\)/)
+  assert.match(main, /generate_handler!\[open_editor, open_new_window, toggle_devtools, is_devtools_open\]/)
+  assert.match(main, /async fn open_new_window\(/)
+  assert.match(main, /WebviewWindowBuilder::new\(&app, &label, tauri::WebviewUrl::External\(url\)\)/)
+  assert.match(main, /permission\("allow-open-new-window"\)/)
+  assert.match(main, /permission\("allow-toggle-devtools"\)/)
 })
 
 test('Tauri app and window use the product name', async () => {
@@ -34,6 +40,4 @@ test('Tauri grants its remote editor access to the native directory picker', asy
   assert.match(cargo, /^tauri-plugin-dialog\s*=\s*"2"$/m)
   assert.match(main, /\.plugin\(tauri_plugin_dialog::init\(\)\)/)
   assert.match(main, /\.permission\("dialog:allow-open"\)/)
-  assert.match(main, /\.on_page_load\(/)
-  assert.match(main, /lvce-tauri-folder-picker/)
 })

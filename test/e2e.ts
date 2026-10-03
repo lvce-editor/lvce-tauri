@@ -55,7 +55,7 @@ driver.on('error', (error) => {
   driverError = error
 })
 let browser: Awaited<ReturnType<typeof remote>> | undefined
-let backendPid
+let backendPid: number | undefined
 try {
   const deadline = Date.now() + 30000
   while (true) {
@@ -78,6 +78,7 @@ try {
   })
   checkpoint('WebDriver session created')
   const activeBrowser = browser
+  const initialWindow = (await browser.getWindowHandles())[0]
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
   await file.doubleClick()
@@ -126,6 +127,52 @@ try {
     await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
     await activeBrowser.$('//*[normalize-space(text())="Open Folder"]').click()
   }
+  const openNewWindow = async () => {
+    const before = await browser!.getWindowHandles()
+    await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
+    await activeBrowser.$('//*[normalize-space(text())="New Window"]').click()
+    await browser!.waitUntil(async () => (await browser!.getWindowHandles()).length === before.length + 1, {
+      timeout: 15000,
+      timeoutMsg: 'File → New Window did not create a native window',
+    })
+    return (await browser!.getWindowHandles()).find((handle: string) => !before.includes(handle))!
+  }
+  const closeCurrentWindow = async () => {
+    const handlesBeforeClose = await browser!.getWindowHandles()
+    const closingHandle = await browser!.getWindowHandle()
+    const isLastWindow = handlesBeforeClose.length === 1
+    try {
+      const result = await browser!.executeAsync((done: (result: unknown) => void) => {
+        window.__TAURI__.window
+          .getCurrentWindow()
+          .close()
+          .then(
+            () => done('closed'),
+            (error: unknown) => done(`close failed: ${String(error)}`),
+          )
+      })
+      if (process.platform !== 'win32' || result !== null) assert.equal(result, 'closed')
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !/All window handles were removed|Session terminated without a reply|invalid session id|no such window/.test(
+          error.message,
+        )
+      ) {
+        throw error
+      }
+    }
+    if (!isLastWindow) {
+      await browser!.waitUntil(async () => !(await browser!.getWindowHandles()).includes(closingHandle), {
+        timeout: 10000,
+        timeoutMsg: `Native window ${closingHandle} did not close`,
+      })
+    }
+  }
+  const assertBackendAlive = () => {
+    assert.ok(backendPid)
+    process.kill(backendPid, 0)
+  }
   const setFolderPickerResult = async (path: string | null) => {
     await activeBrowser.execute((selectedPath: string | null) => {
       window.__TAURI__.dialog.open = async (options: unknown) => {
@@ -154,30 +201,34 @@ try {
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)
   await browser.saveScreenshot('test-results/editor.png')
-  try {
-    // Close through Tauri so this verifies the native window's backend cleanup.
-    const closeResult = await browser.executeAsync((done) => {
-      window.__TAURI__.window
-        .getCurrentWindow()
-        .close()
-        .then(
-          () => done('closed'),
-          (error: unknown) => done(`close failed: ${String(error)}`),
-        )
-    })
-    // EdgeDriver returns null if native close destroys the script context first.
-    // The native diagnostics and backend PID checks below must still prove cleanup.
-    if (process.platform !== 'win32' || closeResult !== null) assert.equal(closeResult, 'closed')
-  } catch (error) {
-    // Closing the last native window can destroy the session before its reply arrives.
-    // Require independent native-close and process-exit evidence below in either case.
-    if (
-      !(error instanceof Error) ||
-      !/All window handles were removed|Session terminated without a reply|invalid session id/.test(error.message)
-    ) {
-      throw error
-    }
-  }
+  const secondWindow = await openNewWindow()
+  await browser.switchToWindow(secondWindow)
+  await browser.$('.EditorRows').waitForExist({ timeout: 30000 })
+  const thirdWindow = await openNewWindow()
+  await browser.switchToWindow(thirdWindow)
+  await browser.$('.EditorRows').waitForExist({ timeout: 30000 })
+  await setFolderPickerResult(selectedWorkspace)
+  await openFolderMenu()
+  await browser.$('[role="treeitem"][aria-label="selected.txt"]').waitForExist({ timeout: 30000 })
+  const secondaryFolderDialogOptions = await browser.execute(
+    () =>
+      (window as unknown as { __folderDialogOptions: { directory: boolean; multiple: boolean; title: string } })
+        .__folderDialogOptions,
+  )
+  assert.deepEqual(secondaryFolderDialogOptions, { directory: true, multiple: false, title: 'Open Folder' })
+  assertBackendAlive()
+
+  await browser.switchToWindow(secondWindow)
+  await closeCurrentWindow()
+  assertBackendAlive()
+  await browser.switchToWindow(initialWindow)
+  await browser.$('.Workbench').waitForExist({ timeout: 15000 })
+
+  await closeCurrentWindow()
+  assertBackendAlive()
+  await browser.switchToWindow(thirdWindow)
+  await browser.$('.Workbench').waitForExist({ timeout: 15000 })
+  await closeCurrentWindow()
   const stopDeadline = Date.now() + 10000
   while (true) {
     try {
@@ -191,6 +242,7 @@ try {
   }
   const diagnostics = await readFile(diagnosticsFile, 'utf8')
   assert.match(diagnostics, /Native window event: CloseRequested/)
+  assert.match(diagnostics, /Backend retained for surviving native windows/)
   assert.match(diagnostics, /Backend stopped after native window close/)
   // Session cleanup must not be what terminates the backend under test.
   await browser.deleteSession().catch(() => {})
