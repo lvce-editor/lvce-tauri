@@ -79,3 +79,21 @@ test('Tauri product name patch applies to the pinned upstream build', async () =
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Tauri developer tools patch applies to the pinned upstream renderer', async () => {
+  const sourcePath = 'packages/renderer-worker/src/parts/Devtools/Devtools.js'
+  const source = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+  const patch = resolve('patches/0003-tauri-devtools.patch')
+  const patchContent = await readFile(patch, 'utf8')
+  assert.equal(patchContent.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-devtools-patch-'))
+  try {
+    const target = join(root, sourcePath)
+    await mkdir(join(root, 'packages/renderer-worker/src/parts/Devtools'), { recursive: true })
+    await writeFile(target, source)
+    run('git', ['init', root], { stdio: 'pipe' })
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

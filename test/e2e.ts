@@ -43,7 +43,7 @@ let driverError
 driver.on('error', (error) => {
   driverError = error
 })
-let browser
+let browser: Awaited<ReturnType<typeof remote>> | undefined
 let backendPid
 try {
   const deadline = Date.now() + 30000
@@ -64,6 +64,7 @@ try {
     logLevel: 'warn',
     capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
+  const activeBrowser = browser
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
   await file.doubleClick()
@@ -82,6 +83,26 @@ try {
     timeout: 15000,
     timeoutMsg: 'Editor did not save the edited text through its Node backend',
   })
+  if (process.platform !== 'win32') {
+    const isDevtoolsOpen = async () =>
+      activeBrowser.executeAsync((done: (result: unknown) => void) => {
+        window.__TAURI__.core.invoke('is_devtools_open').then(done, (error: unknown) => done(String(error)))
+      })
+    const toggleFromHelp = async () => {
+      await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="Help"]').click()
+      await activeBrowser.$('//*[normalize-space(text())="Toggle Developer Tools"]').click()
+    }
+    await toggleFromHelp()
+    await browser.waitUntil(async () => isDevtoolsOpen(), {
+      timeout: 10000,
+      timeoutMsg: 'Help → Toggle Developer Tools did not open the editor webview tools',
+    })
+    await toggleFromHelp()
+    await browser.waitUntil(async () => !(await isDevtoolsOpen()), {
+      timeout: 10000,
+      timeoutMsg: 'Help → Toggle Developer Tools did not close the editor webview tools',
+    })
+  }
   backendPid = Number(await readFile(pidFile, 'utf8'))
   assert.ok(backendPid > 0)
   await browser.saveScreenshot('test-results/editor.png')

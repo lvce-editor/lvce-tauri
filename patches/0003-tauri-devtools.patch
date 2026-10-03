@@ -1,0 +1,13 @@
+diff --git a/packages/renderer-worker/src/parts/Devtools/Devtools.js b/packages/renderer-worker/src/parts/Devtools/Devtools.js
+index 0a6a4d7b0c6c..2d1eed36ffb7 100644
+--- a/packages/renderer-worker/src/parts/Devtools/Devtools.js
++++ b/packages/renderer-worker/src/parts/Devtools/Devtools.js
+@@ -1,5 +1,8 @@
+ import * as ElectronWindow from '../ElectronWindow/ElectronWindow.js'
+ 
+ export const toggleDeveloperTools = () => {
++  if (globalThis.__TAURI__?.core?.invoke) {
++    return globalThis.__TAURI__.core.invoke('toggle_devtools')
++  }
+   return ElectronWindow.toggleDevtools()
+ }
