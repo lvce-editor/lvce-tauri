@@ -1,0 +1,13 @@
+diff --git a/packages/build/src/parts/BuildStaticServer/BuildStaticServer.ts b/packages/build/src/parts/BuildStaticServer/BuildStaticServer.ts
+index fa3e4a97c8f8..0c6e9b226f15 100644
+--- a/packages/build/src/parts/BuildStaticServer/BuildStaticServer.ts
++++ b/packages/build/src/parts/BuildStaticServer/BuildStaticServer.ts
+@@ -155,7 +155,7 @@ const copyStaticServerFiles = async ({ commitHash, product, version, date }) =>
+   await GetStaticFiles.getStaticFiles({
+     etag,
+     name: product.applicationName,
+-    productName: product.nameLong,
++    productName: process.env.LVCE_TAURI_PRODUCT_NAME || product.nameLong,
+     version,
+     commitHash,
+     date,

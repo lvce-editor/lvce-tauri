@@ -7,7 +7,10 @@ const base = resolve('vendor/lvce-editor')
 const out = resolve('src-tauri/resources')
 await rm(out, { recursive: true, force: true })
 await mkdir(out, { recursive: true })
-npm(['run', 'build:server'], { cwd: base, env: { ...process.env, GIT_TAG: 'v0.1.0' } })
+npm(['run', 'build:server'], {
+  cwd: base,
+  env: { ...process.env, GIT_TAG: 'v0.1.0', LVCE_TAURI_PRODUCT_NAME: 'Lvce - Tauri' },
+})
 const names = ['server', 'shared-process', 'static-server']
 for (const name of names) {
   await cp(join(base, 'packages/build/.tmp/server', name), join(out, 'node_modules/@lvce-editor', name), {

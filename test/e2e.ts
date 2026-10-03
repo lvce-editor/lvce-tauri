@@ -64,6 +64,12 @@ try {
     logLevel: 'warn',
     capabilities: { 'tauri:options': { application: resolve(binary) } } as never,
   })
+  assert.equal(await browser.getTitle(), 'Lvce - Tauri')
+  const windowTitle = await browser.executeAsync((done) => {
+    const currentWindow = window.__TAURI__.window.getCurrentWindow() as unknown as { title(): Promise<string> }
+    currentWindow.title().then(done, (error: unknown) => done(String(error)))
+  })
+  assert.equal(windowTitle, 'Lvce - Tauri')
   const file = browser.$('[role="treeitem"][aria-label="smoke.txt"]')
   await file.waitForExist({ timeout: 60000 })
   await file.doubleClick()

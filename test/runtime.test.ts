@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -10,6 +10,8 @@ import { request } from 'node:http'
 test('staged server authenticates HTTP and websocket access and serves the editor', { timeout: 60000 }, async () => {
   const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-server-'))
   const root = resolve('src-tauri/resources')
+  const config = JSON.parse(await readFile(join(root, 'node_modules/@lvce-editor/static-server/config.json'), 'utf8'))
+  assert.equal(config.productName, 'Lvce - Tauri')
   const child = spawn(join(root, process.platform === 'win32' ? 'node.exe' : 'node'), [join(root, 'launch.js')], {
     cwd: root,
     env: {
