@@ -15,6 +15,16 @@ test('Tauri registers the capability needed to close the main window', async () 
   assert.ok(capability.permissions.includes('core:window:allow-close'))
 })
 
+test('Tauri grants its remote editor access to the native directory picker', async () => {
+  const main = await readFile('src-tauri/src/main.rs', 'utf8')
+  const cargo = await readFile('src-tauri/Cargo.toml', 'utf8')
+  assert.match(cargo, /^tauri-plugin-dialog\s*=\s*"2"$/m)
+  assert.match(main, /\.plugin\(tauri_plugin_dialog::init\(\)\)/)
+  assert.match(main, /\.permission\("dialog:allow-open"\)/)
+  assert.match(main, /\.on_page_load\(/)
+  assert.match(main, /lvce-tauri-folder-picker/)
+})
+
 test('Tauri app and window use the product name', async () => {
   const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'))
   assert.equal(config.productName, 'Lvce - Tauri')
