@@ -1,8 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod backend;
 use backend::BackendProcess;
-use std::{process::Command, sync::Mutex, time::Duration};
+use std::{
+    process::Command,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 use tauri::Manager;
+
+static NEXT_WINDOW_ID: AtomicU64 = AtomicU64::new(1);
 
 const NATIVE_FOLDER_PICKER_BRIDGE: &str = r#"(() => {
   const channel = new BroadcastChannel('lvce-tauri-folder-picker');
@@ -19,10 +28,28 @@ const NATIVE_FOLDER_PICKER_BRIDGE: &str = r#"(() => {
 })()"#;
 
 #[derive(Default)]
-struct Backend(Mutex<Option<BackendProcess>>);
+struct Backend(Mutex<BackendState>);
+
+#[derive(Default)]
+struct BackendState {
+    process: Option<BackendProcess>,
+    url: Option<String>,
+}
+
 impl Backend {
     fn stop(&self) {
-        drop(self.0.lock().unwrap().take());
+        let mut state = self.0.lock().unwrap();
+        state.url = None;
+        drop(state.process.take());
+    }
+
+    fn url(&self) -> Result<String, String> {
+        self.0
+            .lock()
+            .map_err(|error| error.to_string())?
+            .url
+            .clone()
+            .ok_or_else(|| "Backend is not running".into())
     }
 }
 impl Drop for Backend { fn drop(&mut self) { self.stop(); } }
@@ -33,19 +60,7 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
     let url = tauri::async_runtime::spawn_blocking(move || start_backend(&handle)).await.map_err(|e| e.to_string())??;
     let navigation = (|| -> Result<(), String> {
         let url: tauri::Url = url.parse().map_err(|e| format!("Invalid backend URL: {e}"))?;
-        // The editor is served by our ephemeral HTTP backend, not the bundled origin.
-        // Grant only close, for this window and this backend's exact port.
-        if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || url.port().is_none() {
-            return Err("Unexpected backend origin".into());
-        }
-        app.add_capability(
-            tauri::ipc::CapabilityBuilder::new("editor-window-close")
-                .local(false)
-                .window(window.label())
-                .remote(format!("{}/*", url.origin().ascii_serialization()))
-                .permission("core:window:allow-close")
-                .permission("dialog:allow-open")
-        ).map_err(|e| e.to_string())?;
+        add_editor_capability(&app, window.label(), &url)?;
         window.navigate(url).map_err(|e| e.to_string())
     })();
     if let Err(error) = navigation {
@@ -55,11 +70,50 @@ async fn open_editor(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Res
     Ok(())
 }
 
+#[tauri::command]
+fn open_new_window(app: tauri::AppHandle) -> Result<(), String> {
+    let url: tauri::Url = app
+        .state::<Backend>()
+        .url()?
+        .parse()
+        .map_err(|e| format!("Invalid backend URL: {e}"))?;
+    let label = format!("editor-{}", NEXT_WINDOW_ID.fetch_add(1, Ordering::Relaxed));
+    add_editor_capability(&app, &label, &url)?;
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
+        .title("Lvce - Tauri")
+        .inner_size(1200.0, 800.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn add_editor_capability(app: &tauri::AppHandle, label: &str, url: &tauri::Url) -> Result<(), String> {
+    // The editor is served by our ephemeral HTTP backend, not the bundled origin.
+    // Grant editor commands only to this window and this backend's exact port.
+    if url.scheme() != "http" || url.host_str() != Some("127.0.0.1") || url.port().is_none() {
+        return Err("Unexpected backend origin".into());
+    }
+    let capability_id = if label == "main" {
+        "editor-window-close".to_string()
+    } else {
+        format!("editor-window-{label}")
+    };
+    app.add_capability(
+        tauri::ipc::CapabilityBuilder::new(capability_id)
+            .local(false)
+            .window(label)
+            .remote(format!("{}/*", url.origin().ascii_serialization()))
+            .permission("core:window:allow-close")
+            .permission("dialog:allow-open"),
+    )
+    .map_err(|e| e.to_string())
+}
+
 fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
     diagnostic("Starting Node backend");
     let state = app.state::<Backend>();
     let mut owned = state.0.lock().map_err(|e| e.to_string())?;
-    if owned.is_some() { return Err("Backend already started".into()); }
+    if owned.process.is_some() { return Err("Backend already started".into()); }
     let root = app.path().resource_dir().map_err(|e| e.to_string())?.join("runtime");
     let profile = app.path().app_data_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
@@ -79,7 +133,8 @@ fn start_backend(app: &tauri::AppHandle) -> Result<String, String> {
         std::fs::write(path, child.id().to_string()).map_err(|error| error.to_string())?;
     }
     diagnostic("Node backend ready");
-    *owned = Some(child);
+    owned.process = Some(child);
+    owned.url = Some(url.clone());
     Ok(url)
 }
 
@@ -115,11 +170,20 @@ fn main() {
                 tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
             ) {
                 diagnostic(&format!("Native window event: {event:?}"));
-                window.app_handle().state::<Backend>().stop();
-                diagnostic("Backend stopped after native window close");
+                let has_other_windows = window
+                    .app_handle()
+                    .webview_windows()
+                    .values()
+                    .any(|candidate| candidate.label() != window.label());
+                if has_other_windows {
+                    diagnostic("Backend retained for surviving native windows");
+                } else {
+                    window.app_handle().state::<Backend>().stop();
+                    diagnostic("Backend stopped after native window close");
+                }
             }
         })
-        .invoke_handler(tauri::generate_handler![open_editor])
+        .invoke_handler(tauri::generate_handler![open_editor, open_new_window])
         .build(tauri::generate_context!()).unwrap_or_else(|error| {
             diagnostic(&format!("Failed to build Tauri application: {error}"));
             panic!("Failed to build Tauri application: {error}");

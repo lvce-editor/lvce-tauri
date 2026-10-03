@@ -101,3 +101,24 @@ test('native folder picker patch applies to the pinned upstream renderer', async
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('native new-window patch dispatches through the renderer process bridge', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-new-window-patch-'))
+  try {
+    const sourcePath = 'packages/renderer-worker/src/parts/Chrome/Chrome.js'
+    const target = join(root, sourcePath)
+    await mkdir(join(root, 'packages/renderer-worker/src/parts/Chrome'), { recursive: true })
+    run('git', ['init', root], { stdio: 'pipe' })
+    const source = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+    await writeFile(target, source)
+    const patch = resolve('patches/0005-tauri-open-new-window.patch')
+    const content = await readFile(patch, 'utf8')
+    assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+    run('git', ['apply', patch], { cwd: root, stdio: 'pipe' })
+    const patched = await readFile(target, 'utf8')
+    assert.match(patched, /RendererProcess\.invoke\('Tauri\.openNewWindow'\)/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})

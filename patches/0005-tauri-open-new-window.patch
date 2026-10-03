@@ -1,0 +1,23 @@
+diff --git a/packages/renderer-worker/src/parts/Chrome/Chrome.js b/packages/renderer-worker/src/parts/Chrome/Chrome.js
+index bdaeffa9bf4a..000000000000 100644
+--- a/packages/renderer-worker/src/parts/Chrome/Chrome.js
++++ b/packages/renderer-worker/src/parts/Chrome/Chrome.js
+@@ -1,4 +1,5 @@
+ import * as Platform from '../Platform/Platform.js'
+ import * as PlatformType from '../PlatformType/PlatformType.js'
+ import * as Command from '../Command/Command.js'
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
+ 
+@@ -50,8 +51,11 @@
+-export const openNew = () => {
++export const openNew = async () => {
+   switch (Platform.getPlatform()) {
+     case PlatformType.Electron:
+       return Command.execute('ElectronWindow.openNew')
+     default:
++      if (await RendererProcess.invoke('Tauri.isAvailable')) {
++        return RendererProcess.invoke('Tauri.openNewWindow')
++      }
+       throw new Error('not implemented')
+   }
+ }
