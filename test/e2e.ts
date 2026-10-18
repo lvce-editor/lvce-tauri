@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { appendFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { once } from 'node:events'
@@ -8,25 +7,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { pathToFileURL } from 'node:url'
-
-const require = createRequire(import.meta.url)
-const webdriverRequire = createRequire(require.resolve('webdriver'))
-const webdriverUndiciUrl = pathToFileURL(webdriverRequire.resolve('undici'))
-const { Agent, setGlobalDispatcher } = await import(webdriverUndiciUrl.href)
-class DiagnosticAgent extends Agent {
-  dispatch(options: never, handler: Record<string, (...args: never[]) => unknown>) {
-    return super.dispatch(options, {
-      ...handler,
-      onError: (error: unknown) => {
-        console.error('[DEBUG-tauri-undici]', error, (error as Error & { cause?: unknown }).cause)
-        handler.onError(error as never)
-      },
-    })
-  }
-}
-setGlobalDispatcher(new DiagnosticAgent())
-const { remote, Key } = await import('webdriverio')
+import { remote, Key } from 'webdriverio'
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
