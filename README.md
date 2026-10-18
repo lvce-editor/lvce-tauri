@@ -4,7 +4,7 @@ A desktop prototype that packages the real LVCE Editor server and UI in a Tauri 
 
 ## Build
 
-Install Node **24.15.0**, Rust stable, and [Tauri's platform prerequisites](https://v2.tauri.app/start/prerequisites/). From a clean checkout:
+Install Node **26.12.0**, Rust stable, and [Tauri's platform prerequisites](https://v2.tauri.app/start/prerequisites/). From a clean checkout:
 
 ```sh
 npm ci
