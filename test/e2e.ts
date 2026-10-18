@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import diagnosticsChannel from 'node:diagnostics_channel'
 import { appendFileSync } from 'node:fs'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -8,13 +7,18 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { remote, Key } from 'webdriverio'
 
-diagnosticsChannel.channel('undici:request:error').subscribe((message) => {
-  if (message && typeof message === 'object' && 'error' in message) {
-    console.error('Undici request failure details:', message.error)
+const nativeFetch = globalThis.fetch
+globalThis.fetch = async (...args) => {
+  try {
+    return await nativeFetch(...args)
+  } catch (error) {
+    console.error('Native fetch failure details:', error)
+    throw error
   }
-})
+}
+
+const { remote, Key } = await import('webdriverio')
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
