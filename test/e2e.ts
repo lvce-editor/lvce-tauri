@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import diagnosticsChannel from 'node:diagnostics_channel'
 import { appendFileSync } from 'node:fs'
 import { spawn, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -8,6 +9,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { remote, Key } from 'webdriverio'
+
+diagnosticsChannel.channel('undici:request:error').subscribe((message) => {
+  if (message && typeof message === 'object' && 'error' in message) {
+    console.error('Undici request failure details:', message.error)
+  }
+})
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
@@ -70,15 +77,6 @@ try {
   const binary = process.env.TAURI_TEST_BINARY
   if (!binary) throw new Error('TAURI_TEST_BINARY must point to the packaged application')
   checkpoint('Driver ready; creating WebDriver session')
-  const nativeFetch = globalThis.fetch
-  globalThis.fetch = async (...args) => {
-    try {
-      return await nativeFetch(...args)
-    } catch (error) {
-      console.error('Native fetch failure details:', error)
-      throw error
-    }
-  }
   browser = await remote({
     hostname: '127.0.0.1',
     port: 4444,
