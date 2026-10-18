@@ -70,6 +70,15 @@ try {
   const binary = process.env.TAURI_TEST_BINARY
   if (!binary) throw new Error('TAURI_TEST_BINARY must point to the packaged application')
   checkpoint('Driver ready; creating WebDriver session')
+  const nativeFetch = globalThis.fetch
+  globalThis.fetch = async (...args) => {
+    try {
+      return await nativeFetch(...args)
+    } catch (error) {
+      console.error('Native fetch failure details:', error)
+      throw error
+    }
+  }
   browser = await remote({
     hostname: '127.0.0.1',
     port: 4444,
