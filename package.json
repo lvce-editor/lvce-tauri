@@ -15,14 +15,14 @@
     "format:check": "prettier --check ."
   },
   "engines": {
-    "node": "24.15.0"
+    "node": "26.12.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.8.4",
     "@types/node": "24.19.0",
+    "prettier": "^3.8.0",
     "typescript": "5.9.3",
-    "webdriverio": "9.20.0",
-    "prettier": "^3.8.0"
+    "webdriverio": "9.32.0"
   },
   "prettier": {
     "semi": false,
