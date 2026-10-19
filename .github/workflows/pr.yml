@@ -50,16 +50,12 @@ jobs:
           Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile driver.zip
           Expand-Archive driver.zip -DestinationPath edgedriver
           "$pwd\edgedriver" >> $env:GITHUB_PATH
-      - name: Test packaged Linux editor (Node 26)
-        id: smoke-linux-26
-        continue-on-error: true
+      - name: Test packaged Linux editor
         if: runner.os == 'Linux'
         run: |
           dpkg-deb -x src-tauri/target/release/bundle/deb/*.deb test-package
           TAURI_TEST_BINARY="$PWD/test-package/usr/bin/lvce-tauri" xvfb-run -a npm run test:e2e
-      - name: Test packaged Windows editor (Node 26)
-        id: smoke-windows-26
-        continue-on-error: true
+      - name: Test packaged Windows editor
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -81,55 +77,6 @@ jobs:
           } finally {
             Remove-ItemProperty -Path $policy -Name 'lvce-tauri.exe'
           }
-      - name: Preserve Node 26 smoke results
-        if: ${{ !cancelled() && runner.os != 'macOS' }}
-        shell: bash
-        run: if [ -d test-results ]; then mv test-results test-results-node-26; fi
-      - name: Use baseline test runner
-        if: ${{ !cancelled() && runner.os != 'macOS' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.15.0
-      - name: Compare packaged Linux editor (Node 24)
-        if: ${{ !cancelled() && runner.os == 'Linux' && steps.smoke-linux-26.outcome != 'skipped' }}
-        run: |
-          TAURI_TEST_BINARY="$PWD/test-package/usr/bin/lvce-tauri" xvfb-run -a npm run test:e2e
-      - name: Compare packaged Windows editor (Node 24)
-        if: ${{ !cancelled() && runner.os == 'Windows' && steps.smoke-windows-26.outcome != 'skipped' }}
-        shell: pwsh
-        run: |
-          $destination = "$pwd\test-package"
-          $env:TAURI_TEST_BINARY = "$destination\lvce-tauri.exe"
-          if (!(Test-Path $env:TAURI_TEST_BINARY)) { throw "Installed executable is missing" }
-          # WebView2 150+ ignores EdgeDriver's debugging env args on elevated runners.
-          # Use its supported machine policy, scoped to this app and this test only.
-          # https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645
-          $policy = 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
-          New-Item -Path $policy -Force | Out-Null
-          New-ItemProperty -Path $policy -Name 'lvce-tauri.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
-          try {
-            npm run test:e2e
-            if ($LASTEXITCODE -ne 0) { throw "Packaged smoke failed: $LASTEXITCODE" }
-          } finally {
-            Remove-ItemProperty -Path $policy -Name 'lvce-tauri.exe'
-          }
-      - name: Restore Node 26 test runner
-        if: ${{ !cancelled() && runner.os != 'macOS' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 26.12.0
-      - name: Require Node 26 smoke success
-        if: ${{ !cancelled() && runner.os != 'macOS' }}
-        shell: bash
-        env:
-          LINUX_OUTCOME: ${{ steps.smoke-linux-26.outcome }}
-          WINDOWS_OUTCOME: ${{ steps.smoke-windows-26.outcome }}
-        run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            test "$LINUX_OUTCOME" = success
-          else
-            test "$WINDOWS_OUTCOME" = success
-          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -137,6 +84,5 @@ jobs:
           path: |
             src-tauri/target/release/bundle/
             test-results/
-            test-results-node-26/
             src-tauri/Cargo.lock
           if-no-files-found: error
