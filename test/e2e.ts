@@ -127,8 +127,13 @@ try {
         ],
       },
     ])
-    const after = { ...(await browser!.$(selector).getLocation()), ...(await browser!.$(selector).getSize()) }
-    assert.ok(Math.abs(axis === 'x' ? after.x - before.x : after.y - before.y) >= 20, `${selector} did not resize`)
+    await browser!.waitUntil(
+      async () => {
+        const after = await browser!.$(selector).getLocation()
+        return Math.abs(axis === 'x' ? after.x - before.x : after.y - before.y) >= 20
+      },
+      { timeout: 10000, timeoutMsg: `${selector} did not resize` },
+    )
     const selection = await browser!.execute(() => window.getSelection()?.toString() || '')
     assert.equal(selection, '', `${selector} drag selected application text`)
     await browser!.releaseActions()
