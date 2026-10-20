@@ -1,12 +1,12 @@
-diff --git a/static/css/parts/_Global.css b/static/css/parts/_Global.css
-index 8a4b7b9..0000000 100644
---- a/static/css/parts/_Global.css
-+++ b/static/css/parts/_Global.css
-@@ -31,6 +31,7 @@ body {
-     Ubuntu,
-     Droid Sans,
-     sans-serif;
+diff --git a/static/css/parts/ViewletSash.css b/static/css/parts/ViewletSash.css
+index 5c8ae11..0000000 100644
+--- a/static/css/parts/ViewletSash.css
++++ b/static/css/parts/ViewletSash.css
+@@ -2,6 +2,7 @@
+   position: absolute;
+   contain: strict;
+   padding: 0;
 +  -webkit-user-select: none;
-   user-select: none;
-   color: var(--WorkbenchForeground);
- }
+   margin: 0;
+   border: 0;
+   z-index: 1;

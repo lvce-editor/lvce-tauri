@@ -62,10 +62,10 @@ test('checked-in patch stays LF and applies to the pinned upstream source', asyn
   }
 })
 
-test('WebKit selection patch applies to the pinned global stylesheet', async () => {
+test('WebKit selection patch applies to the pinned sash stylesheet', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-webkit-selection-patch-'))
   try {
-    const sourcePath = 'static/css/parts/_Global.css'
+    const sourcePath = 'static/css/parts/ViewletSash.css'
     const target = join(root, sourcePath)
     await mkdir(dirname(target), { recursive: true })
     run('git', ['init', root], { stdio: 'pipe' })
@@ -77,7 +77,7 @@ test('WebKit selection patch applies to the pinned global stylesheet', async () 
     run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
     run('git', ['apply', patch], { cwd: root, stdio: 'pipe' })
     const patched = await readFile(target, 'utf8')
-    assert.match(patched, /-webkit-user-select: none;/)
+    assert.match(patched, /\.Sash\s*\{[^}]*-webkit-user-select: none;/s)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

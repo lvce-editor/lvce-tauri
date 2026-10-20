@@ -120,7 +120,7 @@ try {
           {
             type: 'pointerMove',
             x: Math.round(startX + (axis === 'x' ? delta : 0)),
-            y: Math.round(startY + (axis === 'y' ? delta : 0)),
+            y: Math.round(startY - (axis === 'y' ? delta : 0)),
             duration: 200,
           },
           { type: 'pointerUp', button: 0 },
