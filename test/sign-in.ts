@@ -14,13 +14,13 @@ interface SignInWindow extends Window {
 export const testSignIn = async (browser: Browser): Promise<void> => {
   const editorUrl = await browser.getUrl()
   // Exercise native URL validation through the packaged command and capability.
-  const rejected = await browser.executeAsync((done: (value: boolean) => void) => {
+  const rejected = await browser.executeAsync((done: (value: string) => void) => {
     window.__TAURI__.core.invoke('open_external', { url: 'file:///etc/passwd' }).then(
-      () => done(false),
-      () => done(true),
+      () => done('Unexpected browser launch'),
+      (error: unknown) => done(String(error)),
     )
   })
-  assert.equal(rejected, true)
+  assert.match(rejected as string, /External browser URLs must use HTTP or HTTPS/)
   await browser.execute(() => {
     const page = window as SignInWindow
     const invoke = page.__TAURI__.core.invoke.bind(page.__TAURI__.core)
