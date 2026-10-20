@@ -103,9 +103,15 @@ fn add_editor_capability(app: &tauri::AppHandle, label: &str, url: &tauri::Url) 
 }
 
 #[tauri::command]
-fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
     let url = external::validate_url(&url)?;
-    app.opener().open_url(url.as_str(), None::<&str>).map_err(|error| format!("Failed to open the default browser: {error}"))
+    tauri::async_runtime::spawn_blocking(move || {
+        app.opener()
+            .open_url(url.as_str(), None::<&str>)
+            .map_err(|error| format!("Failed to open the default browser: {error}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
