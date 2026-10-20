@@ -1,18 +1,18 @@
 diff --git a/packages/server/src/server.js b/packages/server/src/server.js
-index d5939c2e652f..3b97716afe1c 100644
+index b3fb6c6c5a0b..1ebe52725bb1 100644
 --- a/packages/server/src/server.js
 +++ b/packages/server/src/server.js
 @@ -9,6 +9,9 @@ import * as ArgvConfig from './argvConfig.js'
  import { getRemoteSshOptions, isAuthenticatedRemoteRequest } from './remoteSshOptions.js'
  import { sendSocket } from './sendSocket.js'
  
-+import { createAuth } from './tauriAuth.js'
++import { allowTauriIpc, createAuth } from './tauriAuth.js'
 +const tauriAuth = createAuth(process.env.LVCE_TAURI_TOKEN)
 +
  const __dirname = dirname(fileURLToPath(import.meta.url))
  const ROOT = resolve(__dirname, '../../../')
  
-@@ -116,15 +119,22 @@ const isStatic = (url) => {
+@@ -118,15 +121,22 @@ const isStatic = (url) => {
  }
  
  const handleRequest = (req, res) => {
@@ -37,7 +37,7 @@ index d5939c2e652f..3b97716afe1c 100644
  }
  
  const state = {
-@@ -170,14 +180,23 @@ const handleSharedProcessDisconnect = () => {
+@@ -172,14 +182,23 @@ const handleSharedProcessDisconnect = () => {
    console.info('[server] shared process disconnected')
  }
  
@@ -69,7 +69,7 @@ index d5939c2e652f..3b97716afe1c 100644
  
  /**
   *
-@@ -333,8 +352,12 @@ const callbacks = Object.create(null)
+@@ -335,8 +354,12 @@ const callbacks = Object.create(null)
  
  const registerCallback = () => {
    const id = createId()
@@ -84,7 +84,17 @@ index d5939c2e652f..3b97716afe1c 100644
    return {
      id,
      promise,
-@@ -401,6 +424,10 @@ const handleResponseViaProcess = async (request, res, getProcess, method, ...par
+@@ -377,6 +400,9 @@ const sendResponse = (res, result) => {
+     return
+   }
+   res.statusCode = status
++  if (process.env.LVCE_TAURI_TOKEN && headers['Content-Type']?.startsWith('text/html')) {
++    allowTauriIpc(headers)
++  }
+   setHeaders(res, headers)
+   if (hasBody) {
+     res.end(body)
+@@ -403,6 +429,10 @@ const handleResponseViaProcess = async (request, res, getProcess, method, ...par
   * @param {import('net').Socket} socket
   */
  const handleUpgrade = (request, socket) => {
@@ -95,7 +105,7 @@ index d5939c2e652f..3b97716afe1c 100644
    if (remoteSshOptions.enabled && !isAuthenticatedRemoteRequest(request, remoteSshOptions)) {
      socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
      return
-@@ -408,7 +435,7 @@ const handleUpgrade = (request, socket) => {
+@@ -410,7 +440,7 @@ const handleUpgrade = (request, socket) => {
    if (remoteSshOptions.enabled) {
      trackRemoteClient(socket)
    }
@@ -104,7 +114,7 @@ index d5939c2e652f..3b97716afe1c 100644
  }
  
  const handleServerError = (error) => {
-@@ -429,7 +456,7 @@ const handleAppReady = () => {
+@@ -431,7 +461,7 @@ const handleAppReady = () => {
    } else {
      const address = server.address()
      const port = typeof address === 'object' && address ? address.port : PORT
@@ -115,11 +125,24 @@ index d5939c2e652f..3b97716afe1c 100644
  
 diff --git a/packages/server/src/tauriAuth.js b/packages/server/src/tauriAuth.js
 new file mode 100644
-index 000000000000..000000000000
+index 000000000000..59b9968f4fe8
 --- /dev/null
 +++ b/packages/server/src/tauriAuth.js
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,48 @@
 +import { createHash } from 'node:crypto';
++export const allowTauriIpc = (headers) => {
++    const policy = headers['Content-Security-Policy'];
++    if (!policy)
++        return headers;
++    const directives = policy.split(';').map((directive) => directive.trim());
++    const connectIndex = directives.findIndex((directive) => directive.startsWith('connect-src '));
++    if (connectIndex === -1)
++        directives.push('connect-src ipc:');
++    else if (!directives[connectIndex].split(/\s+/).includes('ipc:'))
++        directives[connectIndex] += ' ipc:';
++    headers['Content-Security-Policy'] = directives.join('; ');
++    return headers;
++};
 +export const createAuth = (token) => {
 +    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token))
 +        throw new Error('Missing Tauri session token');

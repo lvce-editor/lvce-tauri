@@ -11,6 +11,17 @@ interface AuthResponse {
   end(body?: string): void
 }
 
+export const allowTauriIpc = (headers: Record<string, string>) => {
+  const policy = headers['Content-Security-Policy']
+  if (!policy) return headers
+  const directives = policy.split(';').map((directive) => directive.trim())
+  const connectIndex = directives.findIndex((directive) => directive.startsWith('connect-src '))
+  if (connectIndex === -1) directives.push('connect-src ipc:')
+  else if (!directives[connectIndex].split(/\s+/).includes('ipc:')) directives[connectIndex] += ' ipc:'
+  headers['Content-Security-Policy'] = directives.join('; ')
+  return headers
+}
+
 export const createAuth = (token: string | undefined) => {
   if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) throw new Error('Missing Tauri session token')
   const cookieName = `lvce-tauri-${token.slice(0, 16)}`
