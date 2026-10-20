@@ -1,0 +1,47 @@
+diff --git a/packages/renderer-worker/src/parts/LaunchAuthWorker/LaunchAuthWorker.js b/packages/renderer-worker/src/parts/LaunchAuthWorker/LaunchAuthWorker.js
+--- a/packages/renderer-worker/src/parts/LaunchAuthWorker/LaunchAuthWorker.js
++++ b/packages/renderer-worker/src/parts/LaunchAuthWorker/LaunchAuthWorker.js
+@@ -1,3 +1,4 @@
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
+ import * as AuthWorkerUrl from '../AuthWorkerUrl/AuthWorkerUrl.js'
+ import * as GetConfiguredWorkerUrl from '../GetConfiguredWorkerUrl/GetConfiguredWorkerUrl.ts'
+ import * as HandleIpc from '../HandleIpc/HandleIpc.js'
+@@ -19,6 +20,7 @@
+   await JsonRpc.invoke(ipc, 'Auth.configure', {
+     backendUrl: Preferences.get('layout.backendUrl') || Product.getBackendUrl(),
+     platform: Platform.getPlatform(),
++    useNativeAuth: await RendererProcess.invoke('Tauri.isAvailable'),
+   })
+   return ipc
+ }
+diff --git a/packages/renderer-worker/src/parts/AuthWorker/AuthWorker.js b/packages/renderer-worker/src/parts/AuthWorker/AuthWorker.js
+--- a/packages/renderer-worker/src/parts/AuthWorker/AuthWorker.js
++++ b/packages/renderer-worker/src/parts/AuthWorker/AuthWorker.js
+@@ -1,12 +1,14 @@
++import * as RendererProcess from '../RendererProcess/RendererProcess.js'
+ import * as GetOrCreateWorker from '../GetOrCreateWorker/GetOrCreateWorker.js'
+ import * as LaunchAuthWorker from '../LaunchAuthWorker/LaunchAuthWorker.js'
+ 
+ const { invoke, invokeAndTransfer, restart } = GetOrCreateWorker.getOrCreateWorker(LaunchAuthWorker.launchAuthWorker)
+ 
+-export const initialize = (backendUrl, platform, href) => {
++export const initialize = async (backendUrl, platform, href) => {
+   return invoke('Auth.initialize', {
+     backendUrl,
+     href,
++    useNativeAuth: await RendererProcess.invoke('Tauri.isAvailable'),
+     platform,
+   })
+ }
+diff --git a/packages/renderer-worker/src/parts/ViewletLayout/ViewletLayout.ts b/packages/renderer-worker/src/parts/ViewletLayout/ViewletLayout.ts
+--- a/packages/renderer-worker/src/parts/ViewletLayout/ViewletLayout.ts
++++ b/packages/renderer-worker/src/parts/ViewletLayout/ViewletLayout.ts
+@@ -2974,7 +2974,7 @@
+ export const signIn = async (state: LayoutState): Promise<LayoutStateResult> => {
+   const { platform, backendUrl } = state
+   let notificationId: string | undefined
+-  if (platform === PlatformType.Electron) {
++  if (platform === PlatformType.Electron || (await RendererProcess.invoke('Tauri.isAvailable'))) {
+     notificationId = await showAuthNotification(
+       'info',
+       'Continue signing in in your browser. If it did not open, check your system default browser settings.',

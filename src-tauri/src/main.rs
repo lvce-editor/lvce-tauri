@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod backend;
+mod external;
 use backend::BackendProcess;
 use std::{
     process::Command,
@@ -10,6 +11,7 @@ use std::{
     time::Duration,
 };
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 static NEXT_WINDOW_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -92,11 +94,18 @@ fn add_editor_capability(app: &tauri::AppHandle, label: &str, url: &tauri::Url) 
             .remote(format!("{}/*", url.origin().ascii_serialization()))
             .permission("core:window:allow-close")
             .permission("allow-open-new-window")
+            .permission("allow-open-external")
             .permission("allow-toggle-devtools")
             .permission("allow-is-devtools-open")
             .permission("dialog:allow-open"),
     )
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let url = external::validate_url(&url)?;
+    app.opener().open_url(url.as_str(), None::<&str>).map_err(|error| format!("Failed to open the default browser: {error}"))
 }
 
 #[tauri::command]
@@ -155,6 +164,7 @@ fn main() {
     diagnostic("Native host started");
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(Backend::default())
         .on_window_event(|window, event| {
             if matches!(
@@ -175,7 +185,7 @@ fn main() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![open_editor, open_new_window, toggle_devtools, is_devtools_open])
+        .invoke_handler(tauri::generate_handler![open_external, open_editor, open_new_window, toggle_devtools, is_devtools_open])
         .build(tauri::generate_context!()).unwrap_or_else(|error| {
             diagnostic(&format!("Failed to build Tauri application: {error}"));
             panic!("Failed to build Tauri application: {error}");
