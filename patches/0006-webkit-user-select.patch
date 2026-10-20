@@ -1,0 +1,12 @@
+diff --git a/static/css/parts/_Global.css b/static/css/parts/_Global.css
+index 8a4b7b9..0000000 100644
+--- a/static/css/parts/_Global.css
++++ b/static/css/parts/_Global.css
+@@ -31,6 +31,7 @@ body {
+     Ubuntu,
+     Droid Sans,
+     sans-serif;
++  -webkit-user-select: none;
+   user-select: none;
+   color: var(--WorkbenchForeground);
+ }

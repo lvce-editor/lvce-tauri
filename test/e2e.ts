@@ -97,6 +97,44 @@ try {
     timeout: 15000,
     timeoutMsg: 'Editor did not save the edited text through its Node backend',
   })
+  // WebKit does not consistently apply the unprefixed body selection rule used by LVCE.
+  // Exercise both layout sashes in the packaged application and ensure their drag does not
+  // select visible application text.
+  await browser.keys([Key.Ctrl, 'j'])
+  const dragSash = async (selector: string, axis: 'x' | 'y') => {
+    const sash = browser!.$(selector)
+    await sash.waitForExist({ timeout: 15000 })
+    await sash.waitForDisplayed({ timeout: 15000 })
+    const before = { ...(await sash.getLocation()), ...(await sash.getSize()) }
+    const startX = before.x + before.width / 2
+    const startY = before.y + before.height / 2
+    const delta = 35
+    await browser!.performActions([
+      {
+        type: 'pointer',
+        id: 'sash-drag',
+        parameters: { pointerType: 'mouse' },
+        actions: [
+          { type: 'pointerMove', x: Math.round(startX), y: Math.round(startY) },
+          { type: 'pointerDown', button: 0 },
+          {
+            type: 'pointerMove',
+            x: Math.round(startX + (axis === 'x' ? delta : 0)),
+            y: Math.round(startY + (axis === 'y' ? delta : 0)),
+            duration: 200,
+          },
+          { type: 'pointerUp', button: 0 },
+        ],
+      },
+    ])
+    const after = { ...(await browser!.$(selector).getLocation()), ...(await browser!.$(selector).getSize()) }
+    assert.ok(Math.abs(axis === 'x' ? after.x - before.x : after.y - before.y) >= 20, `${selector} did not resize`)
+    const selection = await browser!.execute(() => window.getSelection()?.toString() || '')
+    assert.equal(selection, '', `${selector} drag selected application text`)
+    await browser!.releaseActions()
+  }
+  await dragSash('.SashSideBar', 'x')
+  await dragSash('.SashPanel', 'y')
   if (process.platform !== 'win32') {
     const isDevtoolsOpen = async (): Promise<boolean> => {
       const result = await activeBrowser.executeAsync((done: (result: unknown) => void) => {

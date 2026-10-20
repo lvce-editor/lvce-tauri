@@ -62,6 +62,27 @@ test('checked-in patch stays LF and applies to the pinned upstream source', asyn
   }
 })
 
+test('WebKit selection patch applies to the pinned global stylesheet', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-webkit-selection-patch-'))
+  try {
+    const sourcePath = 'static/css/parts/_Global.css'
+    const target = join(root, sourcePath)
+    await mkdir(dirname(target), { recursive: true })
+    run('git', ['init', root], { stdio: 'pipe' })
+    const original = run('git', ['show', `HEAD:${sourcePath}`], { cwd: resolve('vendor/lvce-editor'), stdio: 'pipe' }) + '\n'
+    await writeFile(target, original)
+    const patch = resolve('patches/0006-webkit-user-select.patch')
+    const content = await readFile(patch, 'utf8')
+    assert.equal(content.includes('\r'), false, 'Git must check out patch files with LF on every OS')
+    run('git', ['apply', '--check', patch], { cwd: root, stdio: 'pipe' })
+    run('git', ['apply', patch], { cwd: root, stdio: 'pipe' })
+    const patched = await readFile(target, 'utf8')
+    assert.match(patched, /-webkit-user-select: none;/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('Tauri product name patch applies to the pinned upstream build', async () => {
   const root = await mkdtemp(join(tmpdir(), 'lvce-tauri-product-name-patch-'))
   try {
