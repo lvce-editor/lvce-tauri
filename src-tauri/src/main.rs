@@ -68,6 +68,7 @@ async fn open_new_window(app: tauri::AppHandle) -> Result<(), String> {
     tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
         .title("Lvce - Tauri")
         .inner_size(1200.0, 800.0)
+        .decorations(false)
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
