@@ -90,6 +90,15 @@ try {
     timeout: 10000,
     timeoutMsg: 'Clicking the editor did not focus its keyboard input',
   })
+  if (process.platform !== 'win32') {
+    const contentSecurityPolicy = await activeBrowser.executeAsync((done: (value: string | null) => void) => {
+      fetch(location.href).then(
+        (response) => done(response.headers.get('Content-Security-Policy')),
+        () => done(null),
+      )
+    })
+    assert.match(contentSecurityPolicy || '', /connect-src[^;]*\bipc:/)
+  }
   await browser.keys([Key.Ctrl, 'a'])
   await browser.keys('after tauri')
   await browser.keys([Key.Ctrl, 's'])

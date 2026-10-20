@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFile } from 'node:fs/promises'
-import { createAuth } from '../runtime/auth.js'
+import { allowTauriIpc, createAuth } from '../runtime/auth.js'
 const token = 'a'.repeat(64)
 const auth = createAuth(token)
 const request = (headers = {}) => ({ headers: { host: '127.0.0.1:3456', ...headers } })
 const cookie = `lvce-tauri-${token.slice(0, 16)}=${token}`
+test('adds the Tauri IPC scheme to the editor document CSP without changing other directives', () => {
+  const headers = { 'Content-Security-Policy': "default-src 'none'; script-src 'self'" }
+  assert.equal(allowTauriIpc(headers), headers)
+  assert.equal(headers['Content-Security-Policy'], "default-src 'none'; script-src 'self'; connect-src ipc:")
+  assert.equal(allowTauriIpc(headers)['Content-Security-Policy'], headers['Content-Security-Policy'])
+  const existing = { 'Content-Security-Policy': "default-src 'none'; connect-src 'self'" }
+  assert.equal(allowTauriIpc(existing)['Content-Security-Policy'], "default-src 'none'; connect-src 'self' ipc:")
+})
 test('rejects unauthenticated requests, wrong hosts and cross-origin websocket upgrades', () => {
   assert.equal(auth.authorize(request(), 3456), false)
   assert.equal(auth.authorize(request({ cookie }), 3456), true)
