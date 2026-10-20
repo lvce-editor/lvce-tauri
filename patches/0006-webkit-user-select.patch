@@ -1,0 +1,12 @@
+diff --git a/static/css/parts/ViewletSash.css b/static/css/parts/ViewletSash.css
+index 5c8ae11..0000000 100644
+--- a/static/css/parts/ViewletSash.css
++++ b/static/css/parts/ViewletSash.css
+@@ -2,6 +2,7 @@
+   position: absolute;
+   contain: strict;
+   padding: 0;
++  -webkit-user-select: none;
+   margin: 0;
+   border: 0;
+   z-index: 1;
