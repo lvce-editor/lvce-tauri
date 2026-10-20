@@ -108,7 +108,7 @@ try {
     const before = { ...(await sash.getLocation()), ...(await sash.getSize()) }
     const startX = before.x + before.width / 2
     const startY = before.y + before.height / 2
-    const delta = 35
+    const delta = axis === 'y' ? 100 : 35
     await browser!.performActions([
       {
         type: 'pointer',
