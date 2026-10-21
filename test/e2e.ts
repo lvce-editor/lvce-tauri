@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { remote, Key } from 'webdriverio'
+import { testSignIn } from './sign-in.js'
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
 const workspace = join(profile, 'workspace')
@@ -175,6 +176,8 @@ try {
       })
     }
   }
+  await testSignIn(activeBrowser)
+  checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
   const openFolderMenu = async () => {
     await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
     await activeBrowser.$('//*[normalize-space(text())="Open Folder"]').click()

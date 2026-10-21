@@ -39,4 +39,6 @@ CI builds Debian, Windows NSIS, and macOS app artifacts. Each OS runs authentica
 
 macOS currently has build/backend coverage and the manual smoke flow above. This prototype uses the direct native-driver route; Tauri's [WebDriver documentation](https://v2.tauri.app/develop/tests/webdriver/) distinguishes that route from the newer embedded WebdriverIO service that can support macOS. Integrating that service is not claimed here. The native UI smoke must be run manually on macOS before relying on it there.
 
+Sign In opens the system browser with the native OAuth client and a temporary loopback callback. The editor stays open and exchanges the callback code with PKCE, using its existing web storage for the session. Browser-launch failures and abandoned sign-ins return actionable notifications; callback listeners are disposed after the attempt. On macOS, manually verify Sign In, returning to the signed-in editor, cancellation, and signing out in addition to the smoke flow above.
+
 No release publication is configured. CI artifacts are unsigned prototypes. Upstream LVCE and Node licenses are included in the runtime; dependency license files are preserved.
