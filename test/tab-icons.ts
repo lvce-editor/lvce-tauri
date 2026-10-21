@@ -6,11 +6,11 @@ type Browser = Awaited<ReturnType<typeof remote>>
 
 export const testTabIcons = async (browser: Browser): Promise<void> => {
   await browser.execute(() => {
-    const samples: { title: string; offset: number; icon: boolean; width: number }[] = []
+    const samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[] = []
     const presentations: { title: string; milliseconds: number }[] = []
     let pending: { title: string; start: number } | undefined
     let frame = 0
-    const sample = () => {
+    const sample = (frame = false) => {
       const tab = document.querySelector('.MainTabSelected')
       const title = tab?.querySelector('.TabTitle')
       if (!(tab instanceof HTMLElement) || !(title instanceof HTMLElement) || !/^[ab]\.py$/.test(title.textContent || '')) return
@@ -20,6 +20,8 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
         offset: title.getBoundingClientRect().left - tab.getBoundingClientRect().left,
         icon: icon instanceof HTMLImageElement && Boolean(icon.getAttribute('src')),
         width: icon?.getBoundingClientRect().width || 0,
+        loaded: icon instanceof HTMLImageElement && icon.complete && icon.naturalWidth > 0,
+        frame,
       }
       if (samples.length < 2000) samples.push(record)
       if (pending?.title === record.title && record.icon) {
@@ -33,10 +35,10 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       if (/^[ab]\.py$/.test(title)) pending = { title, start: performance.now() }
     }
     const tick = () => {
-      sample()
+      sample(true)
       frame = requestAnimationFrame(tick)
     }
-    const observer = new MutationObserver(sample)
+    const observer = new MutationObserver(() => sample())
     observer.observe(document.body, { attributes: true, childList: true, subtree: true })
     document.addEventListener('pointerdown', pointerDown, true)
     frame = requestAnimationFrame(tick)
@@ -53,6 +55,15 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
   try {
     const waitForTab = async (title: string) => {
       await browser.$(`.MainTabSelected[title$="/${title}"] img.TabIcon[src]`).waitForDisplayed({ timeout: 15000 })
+      await browser.waitUntil(
+        () =>
+          browser.execute((name: string) => {
+            const icon = document.querySelector(`.MainTabSelected[title$="/${name}"] img.TabIcon`)
+            return icon instanceof HTMLImageElement && icon.complete && icon.naturalWidth > 0
+          }, title),
+        { timeout: 15000, timeoutMsg: `${title} icon did not load` },
+      )
+      await browser.$('.EditorRows').waitForDisplayed({ timeout: 15000 })
     }
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const title of ['a.py', 'b.py']) {
@@ -76,7 +87,7 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       const state = (
         window as unknown as {
           __tabIconEvidence: {
-            samples: { title: string; offset: number; icon: boolean; width: number }[]
+            samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[]
             presentations: { title: string; milliseconds: number }[]
             stop: () => void
           }
@@ -96,6 +107,7 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
     const offset = evidence.samples[0].offset
     for (const sample of evidence.samples) {
       assert.equal(sample.icon, true, `${sample.title} appeared without its icon source`)
+      if (sample.frame) assert.equal(sample.loaded, true, `${sample.title} painted with an unloaded icon`)
       assert.equal(sample.width, 16, `${sample.title} lost its icon slot`)
       assert.ok(Math.abs(sample.offset - offset) < 0.5, `${sample.title} shifted horizontally`)
     }
