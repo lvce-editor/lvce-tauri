@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { remote, Key } from 'webdriverio'
+import { testTabIcons } from './tab-icons.js'
 import { testSignIn } from './sign-in.js'
 
 const profile = await mkdtemp(join(tmpdir(), 'lvce-tauri-e2e-'))
@@ -21,6 +22,8 @@ await mkdir('test-results', { recursive: true })
 const checkpoint = (message: string) => appendFileSync('test-results/e2e-startup.log', `${new Date().toISOString()} ${message}\n`)
 checkpoint(`Test runner started: ${process.execPath} (${process.pid})`)
 await writeFile(join(workspace, 'smoke.txt'), 'before\n')
+await writeFile(join(workspace, 'a.py'), 'print(1)\n')
+await writeFile(join(workspace, 'b.py'), 'print(2)\n')
 await writeFile(join(selectedWorkspace, 'selected.txt'), 'selected\n')
 await writeFile(join(secondSelectedWorkspace, 'second.txt'), 'second\n')
 const pidFile = join(profile, 'backend.pid')
@@ -150,6 +153,8 @@ try {
   }
   await dragSash('.SashSideBar', 'x')
   await dragSash('.SashPanel', 'y')
+  await testTabIcons(browser)
+  await browser.$('.MainTab[title$="/smoke.txt"]').click()
   if (process.platform !== 'win32') {
     const isDevtoolsOpen = async (): Promise<boolean> => {
       const result = await activeBrowser.executeAsync((done: (result: unknown) => void) => {
