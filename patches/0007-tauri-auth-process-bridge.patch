@@ -1,0 +1,132 @@
+diff --git a/packages/build/src/parts/BundleRendererWorker/BundleRendererWorker.ts b/packages/build/src/parts/BundleRendererWorker/BundleRendererWorker.ts
+index ad84906ad9ae..7ab8ea7fb11e 100644
+--- a/packages/build/src/parts/BundleRendererWorker/BundleRendererWorker.ts
++++ b/packages/build/src/parts/BundleRendererWorker/BundleRendererWorker.ts
+@@ -83,7 +83,13 @@ export const bundleRendererWorker = async ({ cachePath, platform, commitHash, ve
+       from: 'static/js',
+       to: Path.join(cachePath, 'static', 'js'),
+     })
+-    for (const file of ['PrettyBytes', 'JsonRpc', 'RendererProcess', 'IconThemeWorker']) {
++    for (const file of [
++      'PrettyBytes',
++      'JsonRpc',
++      'RendererProcess',
++      'IconThemeWorker',
++      'SendMessagePortToExtensionHostWorker',
++    ]) {
+       await Replace.replace({
+         path: `${cachePath}/src/parts/${file}/${file}.js`,
+         occurrence: `../../../../../static/`,
+diff --git a/packages/renderer-worker/src/parts/SendMessagePortToExtensionHostWorker/SendMessagePortToExtensionHostWorker.js b/packages/renderer-worker/src/parts/SendMessagePortToExtensionHostWorker/SendMessagePortToExtensionHostWorker.js
+index 626191fa9d69..49102943106a 100644
+--- a/packages/renderer-worker/src/parts/SendMessagePortToExtensionHostWorker/SendMessagePortToExtensionHostWorker.js
++++ b/packages/renderer-worker/src/parts/SendMessagePortToExtensionHostWorker/SendMessagePortToExtensionHostWorker.js
+@@ -1,3 +1,4 @@
++import { PlainMessagePortRpcParent } from '../../../../../static/js/lvce-editor-rpc.js'
+ import * as AboutViewWorker from '../AboutViewWorker/AboutViewWorker.js'
+ import * as AccountsViewWorker from '../AccountsViewWorker/AccountsViewWorker.ts'
+ import * as ActivityBarWorker from '../ActivityBarWorker/ActivityBarWorker.js'
+@@ -103,6 +104,20 @@ export const sendMessagePortToExtensionHostWorker = async (port, initialCommand,
+ export const sendMessagePortToSharedProcess = async (port, initialCommand, rpcId) => {
+   Assert.object(port)
+   Assert.string(initialCommand)
++  if (initialCommand === 'HandleMessagePortForAuthProcess.handleMessagePortForAuthProcess' &&
++      await RendererProcess.invoke('Tauri.isAvailable')) {
++    // Browser MessagePorts cannot be transferred to a Node fork. Keep the port here
++    // and forward only OAuth operations through the existing authenticated RPC.
++    await PlainMessagePortRpcParent.create({
++      messagePort: port,
++      commandMap: {
++        'OAuthServer.create': (...params) => SharedProcess.invoke('HandleMessagePortForAuthProcess.createOAuthServer', ...params),
++        'OAuthServer.getCode': (...params) => SharedProcess.invoke('HandleMessagePortForAuthProcess.getOAuthCode', ...params),
++        'OAuthServer.dispose': (...params) => SharedProcess.invoke('HandleMessagePortForAuthProcess.disposeOAuthServer', ...params),
++      },
++    })
++    return
++  }
+   await SharedProcess.invokeAndTransfer(initialCommand, port, rpcId)
+ }
+ 
+diff --git a/packages/shared-process/src/parts/AuthProcessPath/AuthProcessPath.ts b/packages/shared-process/src/parts/AuthProcessPath/AuthProcessPath.ts
+index b8d74fb94aef..78453b9925c3 100644
+--- a/packages/shared-process/src/parts/AuthProcessPath/AuthProcessPath.ts
++++ b/packages/shared-process/src/parts/AuthProcessPath/AuthProcessPath.ts
+@@ -1,4 +1,3 @@
+-import * as Path from '../Path/Path.ts'
+-import * as Root from '../Root/Root.ts'
++import * as ResolveBin from '../ResolveBin/ResolveBin.ts'
+ 
+-export const authProcessPath = Path.join(Root.root, 'packages', 'shared-process', 'node_modules', '@lvce-editor', 'auth-process', 'dist', 'index.js')
++export const authProcessPath = ResolveBin.resolveBin('@lvce-editor/auth-process')
+diff --git a/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ipc.ts b/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ipc.ts
+index 93f73c77c998..70b7fd0391b2 100644
+--- a/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ipc.ts
++++ b/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ipc.ts
+@@ -3,6 +3,9 @@ import * as HandleMessagePortForAuthProcess from './HandleMessagePortForAuthProc
+ export const name = 'HandleMessagePortForAuthProcess'
+ 
+ export const Commands = {
++  createOAuthServer: HandleMessagePortForAuthProcess.createOAuthServer,
++  disposeOAuthServer: HandleMessagePortForAuthProcess.disposeOAuthServer,
++  getOAuthCode: HandleMessagePortForAuthProcess.getOAuthCode,
+   handleAuthProcessIpcClosed: HandleMessagePortForAuthProcess.handleAuthProcessIpcClosed,
+   handleMessagePortForAuthProcess: HandleMessagePortForAuthProcess.handleMessagePortForAuthProcess,
+ }
+diff --git a/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ts b/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ts
+index 8101d290a485..b8d4970f6ff2 100644
+--- a/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ts
++++ b/packages/shared-process/src/parts/HandleMessagePortForAuthProcess/HandleMessagePortForAuthProcess.ts
+@@ -2,6 +2,7 @@ import * as AuthProcess from '../AuthProcess/AuthProcess.ts'
+ import * as AuthProcessState from '../AuthProcessState/AuthProcessState.ts'
+ import * as HandleIncomingIpc from '../HandleIncomingIpc/HandleIncomingIpc.ts'
+ import * as IpcId from '../IpcId/IpcId.ts'
++import * as JsonRpc from '../JsonRpc/JsonRpc.ts'
+ 
+ export const handleMessagePortForAuthProcess = (port: any, ipcId: any): any => {
+   AuthProcessState.increment()
+@@ -20,3 +21,31 @@ export const handleAuthProcessIpcClosed = async (): Promise<any> => {
+   const ipc = await promise
+   ipc.dispose()
+ }
++
++const nativeAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
++
++export const disposeOAuthServer = async (id: string): Promise<void> => {
++  clearTimeout(nativeAuthTimers.get(id))
++  nativeAuthTimers.delete(id)
++  const ipc = await AuthProcess.getOrCreate()
++  await JsonRpc.invoke(ipc, 'OAuthServer.dispose', id)
++}
++
++export const createOAuthServer = async (id: string, successHtml: string, errorHtml: string): Promise<number> => {
++  const ipc = await AuthProcess.getOrCreate()
++  const port = await JsonRpc.invoke(ipc, 'OAuthServer.create', id, successHtml, errorHtml)
++  clearTimeout(nativeAuthTimers.get(id))
++  // The worker disposes normally after its 30-second login wait. Bound ownership
++  // here too, in case its MessagePort disappears during reload or window close.
++  const timer = setTimeout(() => {
++    void disposeOAuthServer(id).catch(() => {})
++  }, 60_000)
++  timer.unref()
++  nativeAuthTimers.set(id, timer)
++  return port
++}
++
++export const getOAuthCode = async (id: string): Promise<string> => {
++  const ipc = await AuthProcess.getOrCreate()
++  return JsonRpc.invoke(ipc, 'OAuthServer.getCode', id)
++}
+diff --git a/packages/shared-process/src/parts/ModuleMap/ModuleMap.ts b/packages/shared-process/src/parts/ModuleMap/ModuleMap.ts
+index b45f1b4f3740..01e3c95126f7 100644
+--- a/packages/shared-process/src/parts/ModuleMap/ModuleMap.ts
++++ b/packages/shared-process/src/parts/ModuleMap/ModuleMap.ts
+@@ -182,6 +182,9 @@ export const getModuleId = (commandId: any): any => {
+       return ModuleId.HandleElectronMessagePort
+     case 'HandleElectronReady.handleElectronReady':
+       return ModuleId.HandleElectronReady
++    case 'HandleMessagePortForAuthProcess.createOAuthServer':
++    case 'HandleMessagePortForAuthProcess.disposeOAuthServer':
++    case 'HandleMessagePortForAuthProcess.getOAuthCode':
+     case 'HandleMessagePortForAuthProcess.handleAuthProcessIpcClosed':
+     case 'HandleMessagePortForAuthProcess.handleMessagePortForAuthProcess':
+       return ModuleId.HandleMessagePortForAuthProcess

@@ -5,7 +5,7 @@ type Browser = Awaited<ReturnType<typeof remote>>
 
 interface SignInWindow extends Window {
   __signInTest?: {
-    invoke: Window['__TAURI__']['core']['invoke']
+    tauri: Window['__TAURI__']
     urls: string[]
     fail: boolean
   }
@@ -21,23 +21,30 @@ export const testSignIn = async (browser: Browser): Promise<void> => {
     )
   })
   assert.match(rejected as string, /External browser URLs must use HTTP or HTTPS/)
-  await browser.execute(() => {
+  const hook = await browser.execute(() => {
     const page = window as SignInWindow
-    const invoke = page.__TAURI__.core.invoke.bind(page.__TAURI__.core)
-    page.__signInTest = { invoke, urls: [], fail: true }
-    page.__TAURI__.core.invoke = async (command, args) => {
-      if (command !== 'open_external') return invoke(command, args)
+    const tauri = page.__TAURI__
+    page.__signInTest = { tauri, urls: [], fail: true }
+    const invoke = async (command: string, args?: Record<string, unknown>) => {
+      if (command !== 'open_external') return tauri.core.invoke(command, args)
       page.__signInTest!.urls.push(String(args?.url))
       if (page.__signInTest!.fail) throw new Error('Test default browser unavailable')
-      // Capture the launch instead of opening a real browser on CI.
       return undefined
     }
+    // Tauri exports frozen module namespaces. Replace the page facade, not core.invoke.
+    page.__TAURI__ = { ...tauri, core: { ...tauri.core, invoke } }
+    return page.__TAURI__.core.invoke === invoke
   })
+  assert.equal(hook, true, 'Native browser capture hook was not installed')
   const signIn = async () => {
+    await browser.$('.EditorRows .EditorRow').click()
+    await browser.waitUntil(() => browser.$('.EditorInput textarea').isFocused(), { timeout: 10000 })
     await browser.keys([Key.Ctrl, Key.Shift, 'p'])
     const input = browser.$('input[name="QuickPickInput"]')
     await input.waitForExist({ timeout: 10000 })
-    await input.setValue('>Account: Sign In')
+    await browser.waitUntil(() => browser.$('input[name="QuickPickInput"]').isFocused(), { timeout: 10000 })
+    // Clearing the command prefix changes providers and can replace the input in WebKit.
+    await browser.keys('Account: Sign In')
     const command = browser.$('.QuickPickItem')
     await browser.waitUntil(async () => (await command.getText()).includes('Account: Sign In'), { timeout: 10000 })
     await browser.keys(Key.Enter)
@@ -76,7 +83,7 @@ export const testSignIn = async (browser: Browser): Promise<void> => {
   } finally {
     await browser.execute(() => {
       const page = window as SignInWindow
-      page.__TAURI__.core.invoke = page.__signInTest!.invoke
+      page.__TAURI__ = page.__signInTest!.tauri
       delete page.__signInTest
     })
   }
