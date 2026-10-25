@@ -1,5 +1,5 @@
 {
   "repository": "https://github.com/lvce-editor/lvce-editor.git",
   "revision": "bccdc273a479666cdf05b0e3ab8907c7f6801c89",
-  "node": "26.12.0"
+  "node": "26.12.1"
 }
