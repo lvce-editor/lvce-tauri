@@ -43,7 +43,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   await selectTab('a')
   const states = await execute<Record<string, { moduleId: string; uid: number }>>('Viewlet.getAllStates')
   const main = Object.values(states).find((state) => state.moduleId === 'Main')!
-  const baseline = await execute<MainState>('Viewlet.executeViewletCommand', main.uid, 'getComponentState', main.uid)
+  const baseline = await execute<MainState>('ComponentState.getState', main.uid)
   const outgoing = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/a.py'))!
   const incoming = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/b.py'))!
   assert.equal(baseline.layout.groups[0].activeTabId, outgoing.id, 'Outgoing tab state did not match the selected tab')
