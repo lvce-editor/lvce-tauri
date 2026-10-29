@@ -187,7 +187,9 @@ try {
   checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
   const openFolderMenu = async () => {
     await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
-    await activeBrowser.$('//*[normalize-space(text())="Open Folder"]').click()
+    const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
+    await openFolder.waitForDisplayed({ timeout: 5000 })
+    await openFolder.click()
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()
