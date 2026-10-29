@@ -8,7 +8,6 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
   await browser.execute(() => {
     const samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[] = []
     const presentations: { title: string; milliseconds: number }[] = []
-    let pending: { title: string; start: number } | undefined
     let frame = 0
     const sample = (frame = false) => {
       const tab = document.querySelector('.MainTabSelected')
@@ -24,10 +23,6 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
         frame,
       }
       if (samples.length < 2000) samples.push(record)
-      if (pending?.title === record.title && record.icon) {
-        presentations.push({ title: record.title, milliseconds: performance.now() - pending.start })
-        pending = undefined
-      }
     }
     const tick = () => {
       sample(true)
@@ -39,9 +34,7 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
     ;(window as unknown as { __tabIconEvidence: unknown }).__tabIconEvidence = {
       samples,
       presentations,
-      markPending: (title: string) => {
-        pending = { title, start: performance.now() }
-      },
+      recordPresentation: (title: string, milliseconds: number) => presentations.push({ title, milliseconds }),
       stop: () => {
         observer.disconnect()
         cancelAnimationFrame(frame)
@@ -62,14 +55,20 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       await browser.$('.EditorRows').waitForDisplayed({ timeout: 15000 })
     }
     const clickAndWait = async (title: string, selector: string, doubleClick = false) => {
-      await browser.execute((name: string) => {
-        ;(window as unknown as { __tabIconEvidence: { markPending: (title: string) => void } }).__tabIconEvidence.markPending(
-          name,
-        )
-      }, title)
+      const start = await browser.execute(() => performance.now())
       if (doubleClick) await browser.$(selector).doubleClick()
       else await browser.$(selector).click()
       await waitForTab(title)
+      const milliseconds = await browser.execute((started: number) => performance.now() - started, start)
+      await browser.execute(
+        (name: string, elapsed: number) => {
+          ;(
+            window as unknown as { __tabIconEvidence: { recordPresentation: (title: string, milliseconds: number) => void } }
+          ).__tabIconEvidence.recordPresentation(name, elapsed)
+        },
+        title,
+        milliseconds,
+      )
     }
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const title of ['a.py', 'b.py']) {
