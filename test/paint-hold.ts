@@ -11,11 +11,31 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await browser.$(`.MainTab[title$="/${name}.py"]`).click()
+        const point = await browser.execute((tabName: string) => {
+          const tab = document.querySelector<HTMLElement>(`.MainTab[title$="/${tabName}.py"]`)
+          if (!tab) return undefined
+          const bounds = tab.getBoundingClientRect()
+          return { x: Math.round(bounds.x + bounds.width / 2), y: Math.round(bounds.y + bounds.height / 2) }
+        }, name)
+        assert.ok(point, `Tab ${name}.py was not found`)
+        await browser.performActions([
+          {
+            type: 'pointer',
+            id: 'select-tab',
+            parameters: { pointerType: 'mouse' },
+            actions: [
+              { type: 'pointerMove', x: point.x, y: point.y },
+              { type: 'pointerDown', button: 0 },
+              { type: 'pointerUp', button: 0 },
+            ],
+          },
+        ])
+        await browser.releaseActions()
         await browser.$(`.MainTabSelected[title$="/${name}.py"]`).waitForDisplayed({ timeout: 5000 })
         return
       } catch (error) {
         lastError = error
+        await browser.releaseActions()
       }
     }
     throw lastError
