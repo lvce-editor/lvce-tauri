@@ -43,7 +43,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   await selectTab('a')
   const states = await execute<Record<string, { moduleId: string; uid: number }>>('Viewlet.getAllStates')
   const main = Object.values(states).find((state) => state.moduleId === 'Main')!
-  const baseline = await execute<MainState>('MainArea.getComponentState', main.uid)
+  const baseline = await execute<MainState>('Viewlet.executeViewletCommand', main.uid, 'getComponentState', main.uid)
   const outgoing = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/a.py'))!
   const incoming = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/b.py'))!
   assert.equal(baseline.layout.groups[0].activeTabId, outgoing.id, 'Outgoing tab state did not match the selected tab')
@@ -67,7 +67,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     sample()
   })
   try {
-    await execute('MainArea.setComponentState', pending)
+    await execute('Viewlet.executeViewletCommand', main.uid, 'setComponentState', pending)
     await selectTab('b')
     await browser.$('.Main .TextEditor--loading .EditorLoadingIcon').waitForDisplayed({ timeout: 15000 })
     assert.equal(
@@ -80,7 +80,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     await browser.saveScreenshot('test-results/paint-hold-loading.png')
     const ready = structuredClone(pending)
     ready.layout.groups[0].tabs.find((tab) => tab.id === incoming.id)!.loadingState = 'loaded'
-    await execute('MainArea.setComponentState', ready)
+    await execute('Viewlet.executeViewletCommand', main.uid, 'setComponentState', ready)
     await browser.$('.Main .EditorRows').waitForDisplayed({ timeout: 15000 })
     assert.equal(await browser.execute(() => (document.querySelector('.Main .EditorContainer') as HTMLElement).inert), false)
   } finally {
