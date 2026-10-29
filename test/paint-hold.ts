@@ -67,7 +67,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     ready.layout.groups[0].tabs.find((tab) => tab.id === incoming.id)!.loadingState = 'loaded'
     await execute('ComponentState.setState', main.uid, ready)
     await browser.$('.Main .EditorRows').waitForDisplayed({ timeout: 15000 })
-    assert.equal(await browser.$('.Main .EditorContainer').getAttribute('inert'), null)
+    assert.equal(await browser.execute(() => (document.querySelector('.Main .EditorContainer') as HTMLElement).inert), false)
   } finally {
     const samples = await browser.execute(() => {
       const evidence = (
