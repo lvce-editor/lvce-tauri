@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { remote, Key } from 'webdriverio'
+import { testPaintHold } from './paint-hold.js'
 import { testTabIcons } from './tab-icons.js'
 import { testSignIn } from './sign-in.js'
 
@@ -154,6 +155,7 @@ try {
   await dragSash('.SashSideBar', 'x')
   await dragSash('.SashPanel', 'y')
   await testTabIcons(browser)
+  await testPaintHold(browser)
   await browser.$('.MainTab[title$="/smoke.txt"]').click()
   if (process.platform !== 'win32') {
     const isDevtoolsOpen = async (): Promise<boolean> => {
