@@ -29,26 +29,22 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
         pending = undefined
       }
     }
-    const pointerDown = (event: Event) => {
-      const element = event.target instanceof Element ? event.target.closest('[role="treeitem"],.MainTab') : null
-      const title = element?.getAttribute('aria-label') || element?.querySelector('.TabTitle')?.textContent || ''
-      if (/^[ab]\.py$/.test(title)) pending = { title, start: performance.now() }
-    }
     const tick = () => {
       sample(true)
       frame = requestAnimationFrame(tick)
     }
     const observer = new MutationObserver(() => sample())
     observer.observe(document.body, { attributes: true, childList: true, subtree: true })
-    document.addEventListener('pointerdown', pointerDown, true)
     frame = requestAnimationFrame(tick)
     ;(window as unknown as { __tabIconEvidence: unknown }).__tabIconEvidence = {
       samples,
       presentations,
+      markPending: (title: string) => {
+        pending = { title, start: performance.now() }
+      },
       stop: () => {
         observer.disconnect()
         cancelAnimationFrame(frame)
-        document.removeEventListener('pointerdown', pointerDown, true)
       },
     }
   })
@@ -65,20 +61,27 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       )
       await browser.$('.EditorRows').waitForDisplayed({ timeout: 15000 })
     }
-    for (let cycle = 0; cycle < 4; cycle++) {
-      for (const title of ['a.py', 'b.py']) {
-        await browser.$(`[role="treeitem"][aria-label="${title}"]`).click()
-        await waitForTab(title)
-      }
-    }
-    for (const title of ['a.py', 'b.py']) {
-      await browser.$(`[role="treeitem"][aria-label="${title}"]`).doubleClick()
+    const clickAndWait = async (title: string, selector: string, doubleClick = false) => {
+      await browser.execute((name: string) => {
+        ;(window as unknown as { __tabIconEvidence: { markPending: (title: string) => void } }).__tabIconEvidence.markPending(
+          name,
+        )
+      }, title)
+      if (doubleClick) await browser.$(selector).doubleClick()
+      else await browser.$(selector).click()
       await waitForTab(title)
     }
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const title of ['a.py', 'b.py']) {
-        await browser.$(`.MainTab[title$="/${title}"]`).click()
-        await waitForTab(title)
+        await clickAndWait(title, `[role="treeitem"][aria-label="${title}"]`)
+      }
+    }
+    for (const title of ['a.py', 'b.py']) {
+      await clickAndWait(title, `[role="treeitem"][aria-label="${title}"]`, true)
+    }
+    for (let cycle = 0; cycle < 4; cycle++) {
+      for (const title of ['a.py', 'b.py']) {
+        await clickAndWait(title, `.MainTab[title$="/${title}"]`)
       }
     }
     await browser.saveScreenshot('test-results/tab-icons.png')
