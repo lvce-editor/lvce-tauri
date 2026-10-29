@@ -59,8 +59,8 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
       await browser
         .$('.Main .EditorLoadingIcon')
         .getCSSProperty('animation-name')
-        .then((value) => value.value),
-      'EditorLoadingSpin',
+        .then((value) => value.value?.toLowerCase() ?? ''),
+      'editorloadingspin',
     )
     await browser.saveScreenshot('test-results/paint-hold-loading.png')
     const ready = structuredClone(pending)
