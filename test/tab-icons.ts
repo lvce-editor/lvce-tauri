@@ -5,6 +5,13 @@ import type { remote } from 'webdriverio'
 type Browser = Awaited<ReturnType<typeof remote>>
 
 export const testTabIcons = async (browser: Browser): Promise<void> => {
+  let evidence:
+    | {
+        samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[]
+        presentations: { title: string; milliseconds: number }[]
+        resources: { name: string; milliseconds: number }[]
+      }
+    | undefined
   await browser.execute(() => {
     const samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[] = []
     const presentations: { title: string; milliseconds: number }[] = []
@@ -85,7 +92,7 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
     }
     await browser.saveScreenshot('test-results/tab-icons.png')
   } finally {
-    const evidence = await browser.execute(() => {
+    evidence = await browser.execute(() => {
       const state = (
         window as unknown as {
           __tabIconEvidence: {
@@ -104,14 +111,15 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       return { samples: state.samples, presentations: state.presentations, resources }
     })
     await writeFile('test-results/tab-icons.json', JSON.stringify(evidence, null, 2) + '\n')
-    assert.ok(evidence.samples.length > 0, 'No Python tab frames were observed')
-    assert.ok(evidence.presentations.length >= 8, 'Missing tab presentation timing evidence')
-    const offset = evidence.samples[0].offset
-    for (const sample of evidence.samples) {
-      assert.equal(sample.icon, true, `${sample.title} appeared without its icon source`)
-      if (sample.frame) assert.equal(sample.loaded, true, `${sample.title} painted with an unloaded icon`)
-      assert.equal(sample.width, 16, `${sample.title} lost its icon slot`)
-      assert.ok(Math.abs(sample.offset - offset) < 0.5, `${sample.title} shifted horizontally`)
-    }
+  }
+  assert.ok(evidence, 'Tab icon evidence was not captured')
+  assert.ok(evidence.samples.length > 0, 'No Python tab frames were observed')
+  assert.ok(evidence.presentations.length >= 8, 'Missing tab presentation timing evidence')
+  const offset = evidence.samples[0].offset
+  for (const sample of evidence.samples) {
+    assert.equal(sample.icon, true, `${sample.title} appeared without its icon source`)
+    if (sample.frame) assert.equal(sample.loaded, true, `${sample.title} painted with an unloaded icon`)
+    assert.equal(sample.width, 16, `${sample.title} lost its icon slot`)
+    assert.ok(Math.abs(sample.offset - offset) < 0.5, `${sample.title} shifted horizontally`)
   }
 }
