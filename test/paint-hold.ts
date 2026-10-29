@@ -34,13 +34,18 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     return true
   })
   assert.ok(clicked, 'Could not find the outgoing tab before starting the paint-hold check')
+  await browser.waitUntil(() => browser.execute(() => Boolean(document.querySelector('.MainTabSelected[title$="/a.py"]'))), {
+    timeout: 15000,
+    timeoutMsg: 'Outgoing tab a.py was not selected',
+  })
   const states = await execute<Record<string, { moduleId: string; uid: number }>>('Viewlet.getAllStates')
   const main = Object.values(states).find((state) => state.moduleId === 'Main')!
   const baseline = await execute<MainState>('ComponentState.getState', main.uid)
+  const outgoing = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/a.py'))!
   const incoming = baseline.layout.groups[0].tabs.find((tab) => tab.uri.endsWith('/b.py'))!
+  assert.equal(baseline.layout.groups[0].activeTabId, outgoing.id, 'Outgoing tab state did not match the selected tab')
   assert.notEqual(incoming.editorUid, -1)
   const pending = structuredClone(baseline)
-  pending.layout.groups[0].activeTabId = incoming.id
   pending.layout.groups[0].tabs.find((tab) => tab.id === incoming.id)!.loadingState = 'loading'
   await browser.execute(() => {
     const container = document.querySelector('.Main .EditorContainer') as HTMLElement
@@ -60,6 +65,14 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   })
   try {
     await execute('ComponentState.setState', main.uid, pending)
+    const switched = await browser.execute(() => {
+      const tab = document.querySelector<HTMLElement>('.MainTab[title$="/b.py"]')
+      if (!tab) return false
+      tab.click()
+      return true
+    })
+    assert.ok(switched, 'Could not find the incoming tab before starting the paint-hold check')
+    await browser.$('.MainTabSelected[title$="/b.py"]').waitForDisplayed({ timeout: 15000 })
     await browser.$('.Main .TextEditor--loading .EditorLoadingIcon').waitForDisplayed({ timeout: 15000 })
     assert.equal(
       await browser
