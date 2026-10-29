@@ -49,6 +49,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   assert.equal(baseline.layout.groups[0].activeTabId, outgoing.id, 'Outgoing tab state did not match the selected tab')
   assert.notEqual(incoming.editorUid, -1)
   const pending = structuredClone(baseline)
+  pending.layout.groups[0].activeTabId = incoming.id
   pending.layout.groups[0].tabs.find((tab) => tab.id === incoming.id)!.loadingState = 'loading'
   await browser.execute(() => {
     const container = document.querySelector('.Main .EditorContainer') as HTMLElement
@@ -68,7 +69,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   })
   try {
     await execute('Viewlet.executeViewletCommand', main.uid, 'setComponentState', pending)
-    await selectTab('b')
+    await browser.$('.MainTabSelected[title$="/b.py"]').waitForDisplayed({ timeout: 15000 })
     await browser.$('.Main .TextEditor--loading .EditorLoadingIcon').waitForDisplayed({ timeout: 15000 })
     assert.equal(
       await browser
