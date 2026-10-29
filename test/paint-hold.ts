@@ -27,7 +27,13 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     assert.equal(result.error, undefined)
     return result.value as T
   }
-  await browser.$('.MainTab[title$="/a.py"]').click()
+  const clicked = await browser.execute(() => {
+    const tab = document.querySelector<HTMLElement>('.MainTab[title$="/a.py"]')
+    if (!tab) return false
+    tab.click()
+    return true
+  })
+  assert.ok(clicked, 'Could not find the outgoing tab before starting the paint-hold check')
   const states = await execute<Record<string, { moduleId: string; uid: number }>>('Viewlet.getAllStates')
   const main = Object.values(states).find((state) => state.moduleId === 'Main')!
   const baseline = await execute<MainState>('ComponentState.getState', main.uid)
