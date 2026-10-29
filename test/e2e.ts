@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { remote, Key } from 'webdriverio'
+import { testPaintHold } from './paint-hold.js'
 import { testTabIcons } from './tab-icons.js'
 import { testSignIn } from './sign-in.js'
 
@@ -154,6 +155,7 @@ try {
   await dragSash('.SashSideBar', 'x')
   await dragSash('.SashPanel', 'y')
   await testTabIcons(browser)
+  await testPaintHold(browser)
   await browser.$('.MainTab[title$="/smoke.txt"]').click()
   if (process.platform !== 'win32') {
     const isDevtoolsOpen = async (): Promise<boolean> => {
@@ -185,7 +187,9 @@ try {
   checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
   const openFolderMenu = async () => {
     await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
-    await activeBrowser.$('//*[normalize-space(text())="Open Folder"]').click()
+    const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
+    await openFolder.waitForDisplayed({ timeout: 5000 })
+    await openFolder.click()
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()

@@ -5,10 +5,16 @@ import type { remote } from 'webdriverio'
 type Browser = Awaited<ReturnType<typeof remote>>
 
 export const testTabIcons = async (browser: Browser): Promise<void> => {
+  let evidence:
+    | {
+        samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[]
+        presentations: { title: string; milliseconds: number }[]
+        resources: { name: string; milliseconds: number }[]
+      }
+    | undefined
   await browser.execute(() => {
     const samples: { title: string; offset: number; icon: boolean; width: number; loaded: boolean; frame: boolean }[] = []
     const presentations: { title: string; milliseconds: number }[] = []
-    let pending: { title: string; start: number } | undefined
     let frame = 0
     const sample = (frame = false) => {
       const tab = document.querySelector('.MainTabSelected')
@@ -24,15 +30,6 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
         frame,
       }
       if (samples.length < 2000) samples.push(record)
-      if (pending?.title === record.title && record.icon) {
-        presentations.push({ title: record.title, milliseconds: performance.now() - pending.start })
-        pending = undefined
-      }
-    }
-    const pointerDown = (event: Event) => {
-      const element = event.target instanceof Element ? event.target.closest('[role="treeitem"],.MainTab') : null
-      const title = element?.getAttribute('aria-label') || element?.querySelector('.TabTitle')?.textContent || ''
-      if (/^[ab]\.py$/.test(title)) pending = { title, start: performance.now() }
     }
     const tick = () => {
       sample(true)
@@ -40,15 +37,14 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
     }
     const observer = new MutationObserver(() => sample())
     observer.observe(document.body, { attributes: true, childList: true, subtree: true })
-    document.addEventListener('pointerdown', pointerDown, true)
     frame = requestAnimationFrame(tick)
     ;(window as unknown as { __tabIconEvidence: unknown }).__tabIconEvidence = {
       samples,
       presentations,
+      recordPresentation: (title: string, milliseconds: number) => presentations.push({ title, milliseconds }),
       stop: () => {
         observer.disconnect()
         cancelAnimationFrame(frame)
-        document.removeEventListener('pointerdown', pointerDown, true)
       },
     }
   })
@@ -65,25 +61,38 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       )
       await browser.$('.EditorRows').waitForDisplayed({ timeout: 15000 })
     }
+    const clickAndWait = async (title: string, selector: string, doubleClick = false) => {
+      const start = await browser.execute(() => performance.now())
+      if (doubleClick) await browser.$(selector).doubleClick()
+      else await browser.$(selector).click()
+      await waitForTab(title)
+      const milliseconds = await browser.execute((started: number) => performance.now() - started, start)
+      await browser.execute(
+        (name: string, elapsed: number) => {
+          ;(
+            window as unknown as { __tabIconEvidence: { recordPresentation: (title: string, milliseconds: number) => void } }
+          ).__tabIconEvidence.recordPresentation(name, elapsed)
+        },
+        title,
+        milliseconds,
+      )
+    }
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const title of ['a.py', 'b.py']) {
-        await browser.$(`[role="treeitem"][aria-label="${title}"]`).click()
-        await waitForTab(title)
+        await clickAndWait(title, `[role="treeitem"][aria-label="${title}"]`)
       }
     }
     for (const title of ['a.py', 'b.py']) {
-      await browser.$(`[role="treeitem"][aria-label="${title}"]`).doubleClick()
-      await waitForTab(title)
+      await clickAndWait(title, `[role="treeitem"][aria-label="${title}"]`, true)
     }
     for (let cycle = 0; cycle < 4; cycle++) {
       for (const title of ['a.py', 'b.py']) {
-        await browser.$(`.MainTab[title$="/${title}"]`).click()
-        await waitForTab(title)
+        await clickAndWait(title, `.MainTab[title$="/${title}"]`)
       }
     }
     await browser.saveScreenshot('test-results/tab-icons.png')
   } finally {
-    const evidence = await browser.execute(() => {
+    evidence = await browser.execute(() => {
       const state = (
         window as unknown as {
           __tabIconEvidence: {
@@ -102,14 +111,15 @@ export const testTabIcons = async (browser: Browser): Promise<void> => {
       return { samples: state.samples, presentations: state.presentations, resources }
     })
     await writeFile('test-results/tab-icons.json', JSON.stringify(evidence, null, 2) + '\n')
-    assert.ok(evidence.samples.length > 0, 'No Python tab frames were observed')
-    assert.ok(evidence.presentations.length >= 8, 'Missing tab presentation timing evidence')
-    const offset = evidence.samples[0].offset
-    for (const sample of evidence.samples) {
-      assert.equal(sample.icon, true, `${sample.title} appeared without its icon source`)
-      if (sample.frame) assert.equal(sample.loaded, true, `${sample.title} painted with an unloaded icon`)
-      assert.equal(sample.width, 16, `${sample.title} lost its icon slot`)
-      assert.ok(Math.abs(sample.offset - offset) < 0.5, `${sample.title} shifted horizontally`)
-    }
+  }
+  assert.ok(evidence, 'Tab icon evidence was not captured')
+  assert.ok(evidence.samples.length > 0, 'No Python tab frames were observed')
+  assert.ok(evidence.presentations.length >= 8, 'Missing tab presentation timing evidence')
+  const offset = evidence.samples[0].offset
+  for (const sample of evidence.samples) {
+    assert.equal(sample.icon, true, `${sample.title} appeared without its icon source`)
+    if (sample.frame) assert.equal(sample.loaded, true, `${sample.title} painted with an unloaded icon`)
+    assert.equal(sample.width, 16, `${sample.title} lost its icon slot`)
+    assert.ok(Math.abs(sample.offset - offset) < 0.5, `${sample.title} shifted horizontally`)
   }
 }
