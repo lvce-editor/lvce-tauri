@@ -7,6 +7,19 @@ type Tab = { id: number; editorUid: number; loadingState: string; uri: string }
 type MainState = { uid: number; layout: { groups: { activeTabId: number; tabs: Tab[] }[] } }
 
 export const testPaintHold = async (browser: Browser): Promise<void> => {
+  const selectTab = async (name: string): Promise<void> => {
+    let lastError: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await browser.$(`.MainTab[title$="/${name}.py"]`).click()
+        await browser.$(`.MainTabSelected[title$="/${name}.py"]`).waitForDisplayed({ timeout: 5000 })
+        return
+      } catch (error) {
+        lastError = error
+      }
+    }
+    throw lastError
+  }
   const execute = async <T>(command: string, ...args: unknown[]): Promise<T> => {
     const result = await browser.executeAsync(
       async (command: string, args: unknown[], done: (result: { value?: unknown; error?: string }) => void) => {
@@ -27,17 +40,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     assert.equal(result.error, undefined)
     return result.value as T
   }
-  const clicked = await browser.execute(() => {
-    const tab = document.querySelector<HTMLElement>('.MainTab[title$="/a.py"]')
-    if (!tab) return false
-    tab.click()
-    return true
-  })
-  assert.ok(clicked, 'Could not find the outgoing tab before starting the paint-hold check')
-  await browser.waitUntil(() => browser.execute(() => Boolean(document.querySelector('.MainTabSelected[title$="/a.py"]'))), {
-    timeout: 15000,
-    timeoutMsg: 'Outgoing tab a.py was not selected',
-  })
+  await selectTab('a')
   const states = await execute<Record<string, { moduleId: string; uid: number }>>('Viewlet.getAllStates')
   const main = Object.values(states).find((state) => state.moduleId === 'Main')!
   const baseline = await execute<MainState>('ComponentState.getState', main.uid)
@@ -65,14 +68,7 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
   })
   try {
     await execute('ComponentState.setState', main.uid, pending)
-    const switched = await browser.execute(() => {
-      const tab = document.querySelector<HTMLElement>('.MainTab[title$="/b.py"]')
-      if (!tab) return false
-      tab.click()
-      return true
-    })
-    assert.ok(switched, 'Could not find the incoming tab before starting the paint-hold check')
-    await browser.$('.MainTabSelected[title$="/b.py"]').waitForDisplayed({ timeout: 15000 })
+    await selectTab('b')
     await browser.$('.Main .TextEditor--loading .EditorLoadingIcon').waitForDisplayed({ timeout: 15000 })
     assert.equal(
       await browser
