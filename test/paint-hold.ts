@@ -41,17 +41,17 @@ export const testPaintHold = async (browser: Browser): Promise<void> => {
     throw lastError
   }
   const execute = async <T>(command: string, ...args: unknown[]): Promise<T> => {
-    const result = await browser.executeAsync(
-      async (command: string, args: unknown[], done: (result: { value?: unknown; error?: string }) => void) => {
+    const result = await browser.execute(
+      async (command: string, args: unknown[]) => {
         try {
           const script = Array.from(document.querySelectorAll<HTMLScriptElement>('script[type="module"]')).find((node) =>
             node.src.includes('rendererProcessMain'),
           )!
           const renderer = await import(script.src)
           await renderer.ready
-          done({ value: await renderer.executeCommand(command, ...args) })
+          return { value: await renderer.executeCommand(command, ...args) }
         } catch (error) {
-          done({ error: String(error) })
+          return { error: String(error) }
         }
       },
       command,

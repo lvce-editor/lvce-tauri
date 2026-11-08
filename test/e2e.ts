@@ -90,17 +90,19 @@ try {
   const input = browser.$('.EditorInput textarea')
   await input.waitForExist({ timeout: 30000 })
   // LVCE keeps its keyboard textarea offscreen; pointer events belong to visible rows.
-  await browser.$('.EditorRows .EditorRow').click()
+  await browser.$('.EditorRows .EditorRow', { strict: false }).click()
   await browser.waitUntil(() => input.isFocused(), {
     timeout: 10000,
     timeoutMsg: 'Clicking the editor did not focus its keyboard input',
   })
   if (process.platform !== 'win32') {
-    const contentSecurityPolicy = await activeBrowser.executeAsync((done: (value: string | null) => void) => {
-      fetch(location.href).then(
-        (response) => done(response.headers.get('Content-Security-Policy')),
-        () => done(null),
-      )
+    const contentSecurityPolicy = await activeBrowser.execute(async () => {
+      try {
+        const response = await fetch(location.href)
+        return response.headers.get('Content-Security-Policy')
+      } catch {
+        return null
+      }
     })
     assert.match(contentSecurityPolicy || '', /connect-src[^;]*\bipc:/)
   }
@@ -159,8 +161,12 @@ try {
   await browser.$('.MainTab[title$="/smoke.txt"]').click()
   if (process.platform !== 'win32') {
     const isDevtoolsOpen = async (): Promise<boolean> => {
-      const result = await activeBrowser.executeAsync((done: (result: unknown) => void) => {
-        window.__TAURI__.core.invoke('is_devtools_open').then(done, (error: unknown) => done(String(error)))
+      const result = await activeBrowser.execute(async () => {
+        try {
+          return await window.__TAURI__.core.invoke('is_devtools_open')
+        } catch (error) {
+          return String(error)
+        }
       })
       assert.equal(typeof result, 'boolean', `Native devtools state query failed: ${result}`)
       return result as boolean
@@ -186,14 +192,18 @@ try {
   await testSignIn(activeBrowser)
   checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
   const openFolderMenu = async () => {
-    await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
+    await activeBrowser
+      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
+      .click()
     const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
     await openFolder.waitForDisplayed({ timeout: 5000 })
     await openFolder.click()
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()
-    await activeBrowser.$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]').click()
+    await activeBrowser
+      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
+      .click()
     await activeBrowser.$('//*[normalize-space(text())="New Window"]').click()
     await browser!.waitUntil(async () => (await browser!.getWindowHandles()).length === before.length + 1, {
       timeout: 15000,
@@ -205,27 +215,11 @@ try {
     const handlesBeforeClose = await browser!.getWindowHandles()
     const closingHandle = await browser!.getWindowHandle()
     const isLastWindow = handlesBeforeClose.length === 1
-    try {
-      const result = await browser!.executeAsync((done: (result: unknown) => void) => {
-        window.__TAURI__.window
-          .getCurrentWindow()
-          .close()
-          .then(
-            () => done('closed'),
-            (error: unknown) => done(`close failed: ${String(error)}`),
-          )
-      })
-      if (process.platform !== 'win32' || result !== null) assert.equal(result, 'closed')
-    } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !/All window handles were removed|Session terminated without a reply|invalid session id|no such window/.test(
-          error.message,
-        )
-      ) {
-        throw error
-      }
-    }
+    await browser!.execute(() => {
+      const currentWindow = window.__TAURI__.window.getCurrentWindow()
+      setTimeout(() => void currentWindow.close(), 0)
+      return 'closing'
+    })
     if (!isLastWindow) {
       await browser!.waitUntil(async () => !(await browser!.getWindowHandles()).includes(closingHandle), {
         timeout: 10000,

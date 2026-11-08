@@ -47,6 +47,11 @@ const collect = async (dir: string, built = false): Promise<void> => {
   }
   const pkg = JSON.parse((await readFile(join(dir, 'package.json'))).toString())
   const optional = pkg.optionalDependencies || {}
+  const optionalPeers = new Set(
+    (Object.entries(pkg.peerDependenciesMeta || {}) as [string, { optional?: boolean }][])
+      .filter(([, metadata]) => metadata.optional)
+      .map(([name]) => name),
+  )
   for (const name of new Set([
     ...Object.keys(pkg.dependencies || {}),
     ...Object.keys(optional),
@@ -59,6 +64,9 @@ const collect = async (dir: string, built = false): Promise<void> => {
       if (name in optional || pkg.peerDependenciesMeta?.[name]?.optional) continue
       throw error
     }
+    // Optional peers supplied only by this repository's dev dependencies are not part of
+    // the pinned LVCE runtime graph and must not leak into the packaged application.
+    if (optionalPeers.has(name) && relative(base, dependency).startsWith('..')) continue
     await collect(
       dependency,
       names.some((item) => dependency === join(base, 'packages', item)),

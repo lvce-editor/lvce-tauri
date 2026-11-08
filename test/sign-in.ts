@@ -14,11 +14,13 @@ interface SignInWindow extends Window {
 export const testSignIn = async (browser: Browser): Promise<void> => {
   const editorUrl = await browser.getUrl()
   // Exercise native URL validation through the packaged command and capability.
-  const rejected = await browser.executeAsync((done: (value: string) => void) => {
-    window.__TAURI__.core.invoke('open_external', { url: 'file:///etc/passwd' }).then(
-      () => done('Unexpected browser launch'),
-      (error: unknown) => done(String(error)),
-    )
+  const rejected = await browser.execute(async () => {
+    try {
+      await window.__TAURI__.core.invoke('open_external', { url: 'file:///etc/passwd' })
+      return 'Unexpected browser launch'
+    } catch (error) {
+      return String(error)
+    }
   })
   assert.match(rejected as string, /External browser URLs must use HTTP or HTTPS/)
   const hook = await browser.execute(() => {
@@ -37,7 +39,7 @@ export const testSignIn = async (browser: Browser): Promise<void> => {
   })
   assert.equal(hook, true, 'Native browser capture hook was not installed')
   const signIn = async () => {
-    await browser.$('.EditorRows .EditorRow').click()
+    await browser.$('.EditorRows .EditorRow', { strict: false }).click()
     await browser.waitUntil(() => browser.$('.EditorInput textarea').isFocused(), { timeout: 10000 })
     await browser.keys([Key.Ctrl, Key.Shift, 'p'])
     const input = browser.$('input[name="QuickPickInput"]')
@@ -45,7 +47,7 @@ export const testSignIn = async (browser: Browser): Promise<void> => {
     await browser.waitUntil(() => browser.$('input[name="QuickPickInput"]').isFocused(), { timeout: 10000 })
     // Clearing the command prefix changes providers and can replace the input in WebKit.
     await browser.keys('Account: Sign In')
-    const command = browser.$('.QuickPickItem')
+    const command = browser.$('.QuickPickItem', { strict: false })
     await browser.waitUntil(async () => (await command.getText()).includes('Account: Sign In'), { timeout: 10000 })
     await browser.keys(Key.Enter)
   }
