@@ -191,19 +191,35 @@ try {
   }
   await testSignIn(activeBrowser)
   checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
+  const openFileMenu = async () => {
+    await browser!.waitUntil(
+      async () => {
+        try {
+          const fileEntry = activeBrowser.$('button[aria-label="File"]')
+          if ((await fileEntry.getAttribute('aria-expanded')) === 'true') {
+            return true
+          }
+          await fileEntry.click()
+          return (await activeBrowser.$('button[aria-label="File"]').getAttribute('aria-expanded')) === 'true'
+        } catch {
+          return false
+        }
+      },
+      {
+        timeout: 5000,
+        timeoutMsg: 'File menu did not open',
+      },
+    )
+  }
   const openFolderMenu = async () => {
-    await activeBrowser
-      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
-      .click()
+    await openFileMenu()
     const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
     await openFolder.waitForDisplayed({ timeout: 5000 })
     await openFolder.click()
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()
-    await activeBrowser
-      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
-      .click()
+    await openFileMenu()
     await activeBrowser.$('//*[normalize-space(text())="New Window"]').click()
     await browser!.waitUntil(async () => (await browser!.getWindowHandles()).length === before.length + 1, {
       timeout: 15000,
