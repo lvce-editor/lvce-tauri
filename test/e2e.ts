@@ -191,19 +191,59 @@ try {
   }
   await testSignIn(activeBrowser)
   checkpoint('Packaged sign-in routing, launch failure, retry and cancellation passed')
+  const openFileMenu = async () => {
+    await browser!.waitUntil(
+      async () => {
+        try {
+          const fileEntry = activeBrowser.$('button[aria-label="File"]')
+          if ((await fileEntry.getAttribute('aria-expanded')) === 'true') {
+            return true
+          }
+          await fileEntry.click()
+          return (await activeBrowser.$('button[aria-label="File"]').getAttribute('aria-expanded')) === 'true'
+        } catch {
+          return false
+        }
+      },
+      {
+        timeout: 5000,
+        timeoutMsg: 'File menu did not open',
+      },
+    )
+  }
   const openFolderMenu = async () => {
-    await activeBrowser
-      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
-      .click()
-    const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
-    await openFolder.waitForDisplayed({ timeout: 5000 })
-    await openFolder.click()
+    await browser!.waitUntil(
+      async () => {
+        try {
+          if (
+            await activeBrowser.execute(() =>
+              Boolean((window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions),
+            )
+          ) {
+            return true
+          }
+          await openFileMenu()
+          const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
+          if (!(await openFolder.isDisplayed())) {
+            return false
+          }
+          await openFolder.click()
+          return await activeBrowser.execute(() =>
+            Boolean((window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions),
+          )
+        } catch {
+          return false
+        }
+      },
+      {
+        timeout: 10000,
+        timeoutMsg: 'File → Open Folder did not invoke the folder picker',
+      },
+    )
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()
-    await activeBrowser
-      .$('//*[contains(@class, "TitleBarTopLevelEntry") and normalize-space(.)="File"]', { strict: false })
-      .click()
+    await openFileMenu()
     await activeBrowser.$('//*[normalize-space(text())="New Window"]').click()
     await browser!.waitUntil(async () => (await browser!.getWindowHandles()).length === before.length + 1, {
       timeout: 15000,
@@ -233,6 +273,7 @@ try {
   }
   const setFolderPickerResult = async (path: string | null) => {
     await activeBrowser.execute((selectedPath: string | null) => {
+      delete (window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions
       window.__TAURI__.dialog.open = async (options: unknown) => {
         ;(window as unknown as { __folderDialogOptions: unknown }).__folderDialogOptions = options
         return selectedPath
@@ -288,14 +329,24 @@ try {
   await browser.$('.Workbench').waitForExist({ timeout: 15000 })
   await closeCurrentWindow()
   const stopDeadline = Date.now() + 10000
+  let backendExited = false
   while (true) {
-    try {
-      process.kill(backendPid, 0)
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ESRCH') break
-      throw error
+    if (!backendExited) {
+      try {
+        process.kill(backendPid, 0)
+      } catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+          backendExited = true
+        } else {
+          throw error
+        }
+      }
     }
-    if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} survived window close`)
+    if (backendExited) {
+      const diagnostics = await readFile(diagnosticsFile, 'utf8')
+      if (diagnostics.includes('Backend stopped after native window close')) break
+    }
+    if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} did not log shutdown after window close`)
     await delay(100)
   }
   const diagnostics = await readFile(diagnosticsFile, 'utf8')
