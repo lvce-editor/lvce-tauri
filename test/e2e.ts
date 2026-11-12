@@ -329,14 +329,24 @@ try {
   await browser.$('.Workbench').waitForExist({ timeout: 15000 })
   await closeCurrentWindow()
   const stopDeadline = Date.now() + 10000
+  let backendExited = false
   while (true) {
-    try {
-      process.kill(backendPid, 0)
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ESRCH') break
-      throw error
+    if (!backendExited) {
+      try {
+        process.kill(backendPid, 0)
+      } catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+          backendExited = true
+        } else {
+          throw error
+        }
+      }
     }
-    if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} survived window close`)
+    if (backendExited) {
+      const diagnostics = await readFile(diagnosticsFile, 'utf8')
+      if (diagnostics.includes('Backend stopped after native window close')) break
+    }
+    if (Date.now() > stopDeadline) throw new Error(`Backend ${backendPid} did not log shutdown after window close`)
     await delay(100)
   }
   const diagnostics = await readFile(diagnosticsFile, 'utf8')
