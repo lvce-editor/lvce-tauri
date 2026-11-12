@@ -212,10 +212,34 @@ try {
     )
   }
   const openFolderMenu = async () => {
-    await openFileMenu()
-    const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
-    await openFolder.waitForDisplayed({ timeout: 5000 })
-    await openFolder.click()
+    await browser!.waitUntil(
+      async () => {
+        try {
+          if (
+            await activeBrowser.execute(() =>
+              Boolean((window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions),
+            )
+          ) {
+            return true
+          }
+          await openFileMenu()
+          const openFolder = activeBrowser.$('//*[normalize-space(text())="Open Folder"]')
+          if (!(await openFolder.isDisplayed())) {
+            return false
+          }
+          await openFolder.click()
+          return await activeBrowser.execute(() =>
+            Boolean((window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions),
+          )
+        } catch {
+          return false
+        }
+      },
+      {
+        timeout: 10000,
+        timeoutMsg: 'File → Open Folder did not invoke the folder picker',
+      },
+    )
   }
   const openNewWindow = async () => {
     const before = await browser!.getWindowHandles()
@@ -249,6 +273,7 @@ try {
   }
   const setFolderPickerResult = async (path: string | null) => {
     await activeBrowser.execute((selectedPath: string | null) => {
+      delete (window as unknown as { __folderDialogOptions?: unknown }).__folderDialogOptions
       window.__TAURI__.dialog.open = async (options: unknown) => {
         ;(window as unknown as { __folderDialogOptions: unknown }).__folderDialogOptions = options
         return selectedPath
